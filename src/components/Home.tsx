@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { sections, type SectionId } from '@/content/sections';
 import { site } from '@/content/site';
@@ -54,15 +54,21 @@ export default function Home() {
     return () => mq.removeEventListener('change', sync);
   }, []);
 
-  // phones: a one-time nudge that the shelf is best on a desktop
-  const DESKTOP_HINT_KEY = 'desktop-hint-dismissed';
+  // phones: a one-time nudge to rotate to landscape (wider than 700px gets the full desktop shelf)
+  const DESKTOP_HINT_KEY = 'rotate-hint-dismissed';
   const [desktopHint, setDesktopHint] = useState(false);
+  const hintShown = useRef(false);
   useEffect(() => {
-    if (!mobile) { setDesktopHint(false); return; }
+    if (!mobile) {
+      setDesktopHint(false);
+      // they rotated while the hint was up: job done, don't nag again
+      if (hintShown.current) { try { localStorage.setItem(DESKTOP_HINT_KEY, '1'); } catch { /* private mode */ } }
+      return;
+    }
     let seen = false;
     try { seen = localStorage.getItem(DESKTOP_HINT_KEY) === '1'; } catch { /* private mode */ }
     if (seen) return;
-    const t = setTimeout(() => setDesktopHint(true), 1500); // let the shelf appear first
+    const t = setTimeout(() => { hintShown.current = true; setDesktopHint(true); }, 1500); // let the shelf appear first
     return () => clearTimeout(t);
   }, [mobile]);
   const dismissDesktopHint = () => {
@@ -173,7 +179,8 @@ export default function Home() {
 
       {desktopHint && !active && (
         <div className="desktop-hint" role="status">
-          <p><span aria-hidden="true">🖥️</span><b>Consider switching to desktop for the full 3D experience.</b></p>
+          <div className="rotate-anim" aria-hidden="true"><div className="rotate-phone" /></div>
+          <p><b>Rotate your phone to landscape for the full 3D experience.</b></p>
           <button type="button" onClick={dismissDesktopHint}>got it</button>
         </div>
       )}

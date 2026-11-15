@@ -222,13 +222,29 @@ body.panel-open .switches { display: none; }
   animation: hint-in 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 .desktop-hint p { margin: 0; font-size: 14px; line-height: 1.45; }
-.desktop-hint p span { display: block; font-size: 28px; margin-bottom: 6px; }
+/* little phone that turns from portrait to landscape, on a loop */
+.rotate-anim { width: 64px; height: 64px; display: grid; place-items: center; }
+.rotate-phone {
+  position: relative; width: 26px; height: 46px; border: 2px solid var(--ink); border-radius: 5px;
+  animation: phone-rotate 2.6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+.rotate-phone::before { /* speaker notch */
+  content: ''; position: absolute; top: 3px; left: 50%; width: 8px; height: 2px; margin-left: -4px; border-radius: 1px; background: var(--ink);
+}
+.rotate-phone::after { /* screen glow */
+  content: ''; position: absolute; inset: 8px 3px 5px; border-radius: 2px; background: var(--ink); opacity: 0.15;
+}
+@keyframes phone-rotate {
+  0%, 20% { transform: rotate(0deg); }
+  45%, 80% { transform: rotate(-90deg); }
+  100% { transform: rotate(0deg); }
+}
 .desktop-hint b { font-weight: 600; }
 .desktop-hint button {
   flex: none; font: 12px var(--mono); color: var(--bg); background: var(--ink); border: 0; padding: 8px 16px; cursor: pointer;
 }
 @keyframes hint-in { from { opacity: 0; transform: translateY(calc(-50% + 12px)); } to { opacity: 1; transform: translateY(-50%); } }
-@media (prefers-reduced-motion: reduce) { .desktop-hint { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .desktop-hint, .rotate-phone { animation: none; } .rotate-phone { transform: rotate(-90deg); } }
 
 @media (max-width: 700px) {
   .chrome, .page-head { padding: 14px 16px; }
