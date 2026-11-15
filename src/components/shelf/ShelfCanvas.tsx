@@ -149,6 +149,34 @@ function Vinyl({ b, lit, playing }: { b: Box; lit: boolean; playing: boolean }) 
   );
 }
 
+/** Current album cover printed on the record sleeve (covers the ♪ decal while art is available). */
+function AlbumArt({ sleeve, url }: { sleeve: Box; url: string }) {
+  const [tex, setTex] = useState<THREE.Texture | null>(null);
+  useEffect(() => {
+    let alive = true;
+    let loaded: THREE.Texture | null = null;
+    const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin('anonymous');
+    loader.load(url, (t) => {
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 8;
+      loaded = t;
+      if (alive) setTex(t); else t.dispose();
+    }, undefined, () => alive && setTex(null));
+    return () => { alive = false; loaded?.dispose(); };
+  }, [url]);
+  if (!tex) return null;
+  const m = 0.35; // margin inside the sleeve edge
+  return (
+    <group position={[sleeve.x, sleeve.z, sleeve.y + sleeve.d]} rotation={[-(sleeve.rotX ?? 0) * DEG, 0, 0]}>
+      <mesh position={[sleeve.w / 2, sleeve.h / 2, 0.04]} raycast={() => null}>
+        <planeGeometry args={[sleeve.w - 2 * m, sleeve.h - 2 * m]} />
+        <meshBasicMaterial map={tex} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
+
 /** Contribution skyline: one bar per day for the last N weeks. */
 function Skyline({ plinth, github, lit }: { plinth: Box; github: GithubStats | null; lit: boolean }) {
   const bars = useMemo(() => {
@@ -289,7 +317,12 @@ function ShelfItem({ obj, active, onPick, live }: { obj: ShelfObj; active: boole
       parts.push(<Block key={i} b={b} lit={lit} decals={decalsFor(obj, i)} />);
     });
   }
-  if (obj.kind === 'record') parts.push(<Vinyl key="vinyl" b={obj.boxes[1]} lit={lit} playing={live.nowPlaying?.isPlaying ?? true} />);
+  if (obj.kind === 'record') {
+    const np = live.nowPlaying;
+    // spins while a track plays; before Spotify is connected it just spins for fun
+    parts.push(<Vinyl key="vinyl" b={obj.boxes[1]} lit={lit} playing={!np || !np.configured || np.isPlaying} />);
+    if (np?.albumArt) parts.push(<AlbumArt key="art" sleeve={obj.boxes[5]} url={np.albumArt} />);
+  }
   if (obj.kind === 'github') parts.push(<Skyline key="sky" plinth={obj.boxes[0]} github={live.github} lit={lit} />);
   if (obj.kind === 'plant') parts.push(<Plant key="plant" obj={obj} streak={live.github?.currentStreak ?? 9} lit={lit} />);
 
@@ -302,12 +335,14 @@ function ShelfItem({ obj, active, onPick, live }: { obj: ShelfObj; active: boole
     : { onPointerOver: stop };
 
   const a = obj.anchor;
+  const np = live.nowPlaying;
+  const sub = id === 'spotify' && np?.title ? `${np.isPlaying ? '▶' : 'last played:'} ${np.title} · ${np.artist}` : id ? sectionById(id).kicker : '';
   return (
     <group ref={ref} {...handlers}>
       {obj.float ? <Float speed={1.6} rotationIntensity={0} floatIntensity={2.2} floatingRange={[-1.2, 1.6]}>{parts}</Float> : parts}
       {id && a && hover && !active && (
         <Html position={[a[0], a[2] + 2, a[1]]} zIndexRange={[20, 0]} style={{ pointerEvents: 'none' }}>
-          <div className="tag3d">{sectionById(id).title} ↗<small>{sectionById(id).kicker}</small></div>
+          <div className="tag3d">{sectionById(id).title} ↗<small>{sub}</small></div>
         </Html>
       )}
     </group>

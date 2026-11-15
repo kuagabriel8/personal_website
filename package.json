@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "make:cloud": "node scripts/make-cloud-glb.mjs"
+    "make:cloud": "node scripts/make-cloud-glb.mjs",
+    "spotify:auth": "node scripts/spotify-auth.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",
