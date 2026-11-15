@@ -37,19 +37,23 @@ export type ShelfObj = {
 
 const box = (x: number, y: number, z: number, w: number, d: number, h: number, extra?: Partial<Box>): Box => ({ x, y, z, w, d, h, ...extra });
 
-function keyboard(): Box[] {
+/** Keyboard: blank keycaps, with a legend on the spacebar only. */
+function keyboard(): Pick<ShelfObj, 'boxes' | 'decals'> {
   const boxes = [box(3, 2.5, 0, 24, 8, 1.2)];
+  const decals: Decal[] = [];
   const pitch = 1.75, k = 1.4, x0 = 4.1, y0 = 3.3, z = 1.2, h = 0.7;
   for (let row = 0; row < 4; row++) {
     const y = y0 + row * pitch;
     if (row === 3) {
-      for (const c of [0, 1, 2, 10, 11, 12]) boxes.push(box(x0 + c * pitch, y, z, k, k, h));
-      boxes.push(box(x0 + 3 * pitch, y, z, 7 * pitch - (pitch - k), k, h));
+      for (const c of [0, 1, 2]) boxes.push(box(x0 + c * pitch, y, z, k, k, h));
+      decals.push({ box: boxes.length, face: 'top', text: 'fullstack · cloud · ai', size: 0.5 });
+      boxes.push(box(x0 + 3 * pitch, y, z, 7 * pitch - (pitch - k), k, h)); // spacebar
+      for (const c of [10, 11, 12]) boxes.push(box(x0 + c * pitch, y, z, k, k, h));
     } else {
       for (let c = 0; c < 13; c++) boxes.push(box(x0 + c * pitch, y, z, k, k, h));
     }
   }
-  return boxes;
+  return { boxes, decals };
 }
 
 /** Experience as a little city block: one office tower per company, newest = tallest, each with its name on a sign. */
@@ -120,7 +124,7 @@ export const OBJECTS: ShelfObj[] = [
       box(18.5, 3, 1.6, 2, 2, 1.2), box(19.1, 3.6, 2.8, 0.5, 5.5, 0.4), box(20, 8.5, 1.6, 1, 1, 0.5),
     ],
   },
-  { id: 'skills', bay: 1, level: 3, anchor: [15, 6, 4], boxes: keyboard() },
+  { id: 'skills', bay: 1, level: 3, anchor: [15, 6, 4], ...keyboard() },
   {
     id: 'terminal', bay: 1, level: 2, anchor: [14, 6, 12],
     boxes: [box(9.5, 3, 0, 9, 6, 1), box(8, 1.5, 1, 12, 9, 10)],
