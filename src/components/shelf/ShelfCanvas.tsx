@@ -4,7 +4,8 @@
 //   dark = unlit line art · clay = lit with soft shadows
 // Objects map to site sections; GitHub + Spotify objects react to live data.
 
-import { createContext, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { Drop } from './TeddyRain';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Edges, Float, Html, OrbitControls, Outlines, useGLTF } from '@react-three/drei';
@@ -481,12 +482,45 @@ function Lamp({ obj, night }: { obj: ShelfObj; night: boolean }) {
   );
 }
 
-/** Teddy bear: decorative, wobbles when clicked. */
+// ---- teddy rain: poke the teddy and mini teddies fall from the sky (physics loads on the first poke) ----
+const TeddyRain = lazy(() => import('./TeddyRain'));
+const TeddyCtx = createContext<{ drop: (n: number) => void; count: number }>({ drop: () => {}, count: 0 });
+const MINI_SCALE = 0.55;
+/** most minis on screen at once (the oldest vanish beyond this); fewer on phones to keep physics smooth */
+const maxTeddies = (mobile: boolean) => (mobile ? 8 : 15);
+
+/** The shelf teddy's boxes, recentred on the origin and shrunk, for the falling minis. */
+function miniTeddyModel(teddy: ShelfObj) {
+  const xs = teddy.boxes.flatMap((b) => [b.x, b.x + b.w]);
+  const ys = teddy.boxes.flatMap((b) => [b.y, b.y + b.d]);
+  const zs = teddy.boxes.flatMap((b) => [b.z, b.z + b.h]);
+  const c = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2, (Math.min(...zs) + Math.max(...zs)) / 2];
+  const s = MINI_SCALE;
+  const boxes: Box[] = teddy.boxes.map((b) => ({ x: (b.x - c[0]) * s, y: (b.y - c[1]) * s, z: (b.z - c[2]) * s, w: b.w * s, d: b.d * s, h: b.h * s }));
+  const decals = (teddy.decals ?? []).map((d) => ({ ...d, size: (d.size ?? 1) * s }));
+  // three-axis half extents (x, up, depth), slightly inset so they settle snugly
+  const half: [number, number, number] = [((Math.max(...xs) - Math.min(...xs)) / 2) * s * 0.85, ((Math.max(...zs) - Math.min(...zs)) / 2) * s * 0.92, ((Math.max(...ys) - Math.min(...ys)) / 2) * s * 0.85];
+  return { boxes, decals, half };
+}
+
+function MiniTeddy({ model }: { model: ReturnType<typeof miniTeddyModel> }) {
+  const t = useTheme();
+  const fur = t.lit ? '#e9d3b4' : undefined;
+  return <>{model.boxes.map((b, i) => <Block key={i} b={b} color={fur} decals={model.decals.filter((d) => d.box === i)} />)}</>;
+}
+
+/** Teddy bear: wobbles when poked, and each poke drops a mini teddy from the sky (shift-click drops 10). */
 function Teddy({ obj }: { obj: ShelfObj }) {
   const t = useTheme();
+  const { mobile } = useLayout();
+  const { drop, count } = useContext(TeddyCtx);
   const g = useRef<THREE.Group>(null);
   const wobble = useRef(0);
   const [hover, setHover] = useState(false);
+  // phones have no hover, so the label pops up briefly after each tap instead
+  const [tapped, setTapped] = useState(false);
+  const tapTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(tapTimer.current), []);
   const body = obj.boxes[0];
   const pivot: [number, number, number] = [body.x + body.w / 2, body.z, body.y + body.d / 2];
   useFrame((_, dt) => {
@@ -502,13 +536,31 @@ function Teddy({ obj }: { obj: ShelfObj }) {
       ref={g}
       onPointerOver={(e) => { e.stopPropagation(); setHover(true); document.body.style.cursor = 'pointer'; }}
       onPointerOut={() => { setHover(false); document.body.style.cursor = ''; }}
-      onClick={(e) => { e.stopPropagation(); if (e.delta < 5 && !reduceMotion()) wobble.current = 1.2; }}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (e.delta >= 5) return;
+        if (!reduceMotion()) wobble.current = 1.2;
+        drop(e.nativeEvent.shiftKey ? 10 : 1);
+        if (mobile) {
+          setTapped(true);
+          clearTimeout(tapTimer.current);
+          tapTimer.current = setTimeout(() => setTapped(false), 2500);
+        }
+      }}
     >
       <group position={[-pivot[0], -pivot[1], -pivot[2]]}>
         {obj.boxes.map((b, i) => (
           <Block key={i} b={b} lit={hover} color={hover ? undefined : fur} decals={decalsFor(obj, i)} />
         ))}
       </group>
+      {((hover && !mobile) || (mobile && tapped)) && (
+        <Html position={[0, body.h + 6.5, 0]} zIndexRange={[20, 0]} style={{ pointerEvents: 'none' }}>
+          <div className="tag3d">
+            teddies summoned: {count}
+            <small>max teddies: {maxTeddies(mobile)}</small>
+          </div>
+        </Html>
+      )}
     </group>
   );
 }
@@ -671,6 +723,44 @@ function Scene({ activeId, onPick, live, onContentHeight }: { activeId: SectionI
   const fly = useRef<Flight | null>(null);
   const current = useRef({ box: ALL, pad: 1.08 });
 
+  // ---- teddy rain ----
+  const [drops, setDrops] = useState<Drop[]>([]);
+  const [dropCount, setDropCount] = useState(0);
+  const nextId = useRef(0);
+  const teddyObj = P.layout.objs.find((o) => o.kind === 'teddy');
+  const mini = useMemo(() => (teddyObj ? miniTeddyModel(teddyObj) : null), [teddyObj]);
+  // what minis can land on: boards + posts + every object except the floating cloud (as bounding boxes)
+  const solids = useMemo<Box[]>(() => {
+    const objBoxes = P.layout.objs.filter((o) => o.kind !== 'cloud').map((o) => {
+      const x0 = Math.min(...o.boxes.map((b) => b.x)), x1 = Math.max(...o.boxes.map((b) => b.x + b.w));
+      const y0 = Math.min(...o.boxes.map((b) => b.y)), y1 = Math.max(...o.boxes.map((b) => b.y + b.d));
+      const z0 = Math.min(...o.boxes.map((b) => b.z)), z1 = Math.max(...o.boxes.map((b) => b.z + b.h));
+      return { x: x0, y: y0, z: z0, w: x1 - x0, d: y1 - y0, h: z1 - z0 };
+    });
+    return [...P.layout.shelf, ...objBoxes];
+  }, [P]);
+  const drop = useCallback((n: number) => {
+    const width = P.layout.bays * 30;
+    const top = Math.max(...P.layout.shelf.map((b) => b.z + b.h));
+    const r = (a: number, b: number) => a + Math.random() * (b - a);
+    // phone: the page is scrolled to the teddy, so drop them just above it, in front of the shelf, to fall past it
+    const teddyBase = teddyObj ? teddyObj.boxes[0].z : 0;
+    const fresh: Drop[] = Array.from({ length: n }, (_, i) => ({
+      id: nextId.current++,
+      // three coords (x, up, depth); staggered heights so a shift-click burst rains down rather than clumping
+      pos: P.mobile
+        ? [r(3, width - 3), teddyBase + 22 + r(0, 6) + i * 2.5, r(11, 14.5)]
+        : [r(3, width - 3), top + 10 + r(0, 10) + i * 3, r(2, 10)],
+      rot: [r(0, 6.28), r(0, 6.28), r(0, 6.28)],
+      vel: [r(-4, 4), r(-4, 0), r(-3, 3)],
+      spin: [r(-5, 5), r(-5, 5), r(-5, 5)],
+    }));
+    const max = maxTeddies(P.mobile); // keep it light: the oldest teddies vanish
+    setDrops((d) => [...d, ...fresh].slice(-max));
+    setDropCount((c) => c + n);
+  }, [P, teddyObj]);
+  const teddyApi = useMemo(() => ({ drop, count: dropCount }), [drop, dropCount]);
+
   // phone: camera follows the page scroll; tell the page how tall to be
   const mob = useMemo(() => (P.mobile ? mobileFraming(ALL, size) : null), [P.mobile, ALL, size]);
   useEffect(() => { if (mob) onContentHeight?.(mob.contentPx); }, [mob, onContentHeight]);
@@ -751,12 +841,19 @@ function Scene({ activeId, onPick, live, onContentHeight }: { activeId: SectionI
   });
 
   return (
-    <group position={P.offset}>
-      <Shelf />
-      {P.layout.objs.map((o, i) => (
-        <ShelfObject key={i} obj={o} active={activeId !== null && o.id === activeId} onPick={onPick} live={live} />
-      ))}
-    </group>
+    <TeddyCtx.Provider value={teddyApi}>
+      <group position={P.offset}>
+        <Shelf />
+        {P.layout.objs.map((o, i) => (
+          <ShelfObject key={i} obj={o} active={activeId !== null && o.id === activeId} onPick={onPick} live={live} />
+        ))}
+        {drops.length > 0 && mini && (
+          <Suspense fallback={null}>
+            <TeddyRain drops={drops} solids={solids} half={mini.half} teddy={<MiniTeddy model={mini} />} />
+          </Suspense>
+        )}
+      </group>
+    </TeddyCtx.Provider>
   );
 }
 
