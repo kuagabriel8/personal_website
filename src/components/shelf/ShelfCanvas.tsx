@@ -16,9 +16,13 @@ import type { GithubStats, NowPlaying, Weather } from '@/lib/types';
 
 const DEG = Math.PI / 180;
 const WARM = '#ffc861';
+const NIGHT_BG = '#2f2b28'; // clay at night (keep in sync with globals.css)
 
 const ThemeCtx = createContext<Theme>(THEMES.dark);
 const useTheme = () => useContext(ThemeCtx);
+/** true = clay mode after sunset: screens, signs and labels light up */
+const NightCtx = createContext(false);
+const useNight = () => useContext(NightCtx);
 
 // ---- layouts (desktop: 3 bays · mobile: one tall bay you scroll down) ----
 type Prepared = { layout: ShelfLayout; offset: [number, number, number]; all: THREE.Box3; groundY: number; mobile: boolean };
@@ -39,22 +43,27 @@ const stop = (e: ThreeEvent<PointerEvent>) => e.stopPropagation();
 
 // ---------------------------------------------------------------- primitives
 
-function Surface({ color }: { color: string }) {
+/** `emissive`: glows in that colour (used at night for screens, keys, skyline bars…). */
+function Surface({ color, emissive }: { color: string; emissive?: string }) {
   const t = useTheme();
   const common = { color, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 };
-  return t.lit ? <meshStandardMaterial {...common} roughness={0.95} /> : <meshBasicMaterial {...common} />;
+  if (!t.lit) return <meshBasicMaterial {...common} />;
+  return emissive
+    ? <meshStandardMaterial {...common} roughness={0.95} emissive={emissive} emissiveIntensity={1.1} toneMapped={false} />
+    : <meshStandardMaterial {...common} roughness={0.95} />;
 }
 
 function DecalMesh({ dec, b }: { dec: Decal; b: Box }) {
   const t = useTheme();
+  const night = useNight();
   const top = dec.face === 'top';
   const W = b.w, H = top ? b.d : b.h;
   const tex = useMemo(() => {
-    const tx = new THREE.CanvasTexture(paintDecal(dec, W, H, t.edge));
+    const tx = new THREE.CanvasTexture(paintDecal(dec, W, H, t.edge, 48, night));
     tx.colorSpace = THREE.SRGBColorSpace;
     tx.anisotropy = 8;
     return tx;
-  }, [dec, W, H, t.edge]);
+  }, [dec, W, H, t.edge, night]);
   useEffect(() => () => tex.dispose(), [tex]);
   return (
     <mesh position={top ? [0, b.h / 2 + 0.02, 0] : [0, 0, b.d / 2 + 0.02]} rotation={top ? [-Math.PI / 2, 0, 0] : [0, 0, 0]} raycast={() => null}>
@@ -64,13 +73,15 @@ function DecalMesh({ dec, b }: { dec: Decal; b: Box }) {
   );
 }
 
-function Block({ b, decals = [], lit = false, shelf = false, color }: { b: Box; decals?: Decal[]; lit?: boolean; shelf?: boolean; color?: string }) {
+function Block({ b, decals = [], lit = false, shelf = false, color, glow }: { b: Box; decals?: Decal[]; lit?: boolean; shelf?: boolean; color?: string; glow?: string }) {
   const t = useTheme();
-  const fill = color ?? (shelf ? t.shelf : lit ? t.hot : t.face);
+  const night = useNight();
+  const emissive = night ? glow : undefined;
+  const fill = emissive ?? color ?? (shelf ? t.shelf : lit ? t.hot : t.face);
   const mesh = (
     <mesh castShadow receiveShadow>
       <boxGeometry args={[b.w, b.h, b.d]} />
-      <Surface color={fill} />
+      <Surface color={fill} emissive={emissive} />
       <Edges threshold={15} color={lit ? t.accent : t.edge} />
       {decals.map((d, i) => <DecalMesh key={i} dec={d} b={b} />)}
     </mesh>
@@ -136,7 +147,11 @@ function Rain({ base }: { base: Box }) {
   );
 }
 
-function GlbCloud({ base, lit, raining = false }: { base: Box; lit: boolean; raining?: boolean }) {
+type FlashRef = { current: number }; // 0..1, written by <Lightning>, read by the cloud
+
+const FLASH_COLOR = new THREE.Color('#fff6d8');
+
+function GlbCloud({ base, lit, raining = false, flash }: { base: Box; lit: boolean; raining?: boolean; flash?: FlashRef }) {
   const t = useTheme();
   const { scene } = useGLTF(CLOUD_URL);
   const geometry = useMemo(() => {
@@ -144,19 +159,120 @@ function GlbCloud({ base, lit, raining = false }: { base: Box; lit: boolean; rai
     scene.traverse((o) => { if ((o as THREE.Mesh).isMesh && !g) g = (o as THREE.Mesh).geometry; });
     return g;
   }, [scene]);
+  const std = useRef<THREE.MeshStandardMaterial>(null);
+  const basic = useRef<THREE.MeshBasicMaterial>(null);
+  const baseColor = lit ? t.hot : raining && t.lit ? '#d9d4cc' : t.face;
+
+  // lightning: the cloud lights up from inside
+  useFrame(() => {
+    const m = std.current ?? basic.current;
+    if (!m) return;
+    const k = flash?.current ?? 0;
+    m.color.set(baseColor);
+    if (k > 0) m.color.lerp(FLASH_COLOR, k);
+    if (std.current) std.current.emissiveIntensity = k * 0.8;
+  });
+
   if (!geometry) return null;
+  const common = { color: baseColor, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 };
   return (
     <mesh geometry={geometry} position={[base.x + base.w / 2, base.z + 0.5, base.y + base.d / 2]} scale={0.8} castShadow receiveShadow>
-      <Surface color={lit ? t.hot : raining && t.lit ? '#d9d4cc' : t.face} />
+      {t.lit
+        ? <meshStandardMaterial ref={std} {...common} roughness={0.95} emissive="#fff1b8" emissiveIntensity={0} />
+        : <meshBasicMaterial ref={basic} {...common} />}
       <Outlines thickness={t.lit ? 2.5 : 1.5} color={lit ? t.accent : t.edge} />
     </mesh>
   );
 }
 
-function Vinyl({ b, lit, playing }: { b: Box; lit: boolean; playing: boolean }) {
+/**
+ * Lightning during real thunderstorms in Singapore: a cartoon ⚡ (one solid zig-zag shape, wide at the
+ * top, tapering to a point) plus a double flash every few seconds.
+ */
+// classic bolt outline, top edge at y = 0, tip at the bottom (units ≈ world units)
+const BOLT_OUTLINE: [number, number][] = [[-0.75, 0], [1.05, 0], [0.2, -1.65], [1.0, -1.65], [-0.85, -4.3], [-0.05, -2.4], [-0.85, -2.4]];
+function boltGeometry(flip: number, scale: number) {
+  const shape = new THREE.Shape();
+  const sx = flip * scale * 1.8; // chunky, cartoon proportions
+  BOLT_OUTLINE.forEach(([x, y], i) => (i ? shape.lineTo(x * sx, y * scale) : shape.moveTo(x * sx, y * scale)));
+  shape.closePath();
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.35, bevelEnabled: false });
+  geo.translate(0, 0, -0.175);
+  return geo;
+}
+const BOLT_VARIANTS: [number, number][] = [[1, 1], [-1, 0.95], [1, 1.02]]; // [mirror, scale]
+function Lightning({ base, flash }: { base: Box; flash: FlashRef }) {
+  const BOLTS = useMemo(() => BOLT_VARIANTS.map(([f, s]) => boltGeometry(f, s)), []);
+  useEffect(() => () => BOLTS.forEach((g) => g.dispose()), [BOLTS]);
+  const t = useTheme();
+  const bolts = useRef<(THREE.Group | null)[]>([]);
+  const light = useRef<THREE.PointLight>(null);
+  const s = useRef({ next: 1.2, start: -10, bolt: 0, dx: 0 });
+  const motion = useMemo(() => !reduceMotion(), []);
+  const cx = base.x + base.w / 2;
+  // when the storm passes, don't leave the cloud frozen mid-flash
+  useEffect(() => () => { flash.current = 0; }, [flash]);
+  useFrame(({ clock }) => {
+    const now = clock.elapsedTime, st = s.current;
+    if (now >= st.next) {
+      st.start = now;
+      st.next = now + 2.5 + Math.random() * 4.5;
+      st.bolt = Math.floor(Math.random() * BOLTS.length);
+      st.dx = (Math.random() - 0.5) * 9;
+    }
+    const e = now - st.start;
+    const k = !motion ? 0 : e < 0.07 ? 1 : e < 0.13 ? 0.15 : e < 0.22 ? 0.85 : e < 0.5 ? 0.85 * (1 - (e - 0.22) / 0.28) : 0;
+    flash.current = Math.max(0, k);
+    bolts.current.forEach((g, i) => {
+      if (!g) return;
+      g.visible = i === st.bolt && k > 0.35;
+      g.position.x = cx + st.dx;
+    });
+    if (light.current) light.current.intensity = t.lit ? flash.current * 500 : 0;
+  });
+  return (
+    <>
+      {BOLTS.map((geo, bi) => (
+        // starts inside the cloud (its front hides the top), shoots out of the underside down to the shelf
+        <group key={bi} ref={(g) => { bolts.current[bi] = g; }} position={[cx, base.z + 0.6, base.y + base.d - 0.4]} visible={false}>
+          <mesh geometry={geo} raycast={() => null}>
+            <meshBasicMaterial color="#ffd93b" toneMapped={false} />
+            <Edges threshold={15} color={t.lit ? '#7a5a00' : '#fff6c8'} />
+          </mesh>
+        </group>
+      ))}
+      <pointLight ref={light} position={[cx, base.z - 1, base.y + base.d / 2]} color="#fff1c4" intensity={0} distance={70} decay={1.5} />
+    </>
+  );
+}
+
+/** Load a remote image (e.g. Spotify album art) as a texture; null while loading or if it fails. */
+function useRemoteTexture(url?: string) {
+  const [tex, setTex] = useState<THREE.Texture | null>(null);
+  useEffect(() => {
+    if (!url) { setTex(null); return; }
+    let alive = true;
+    let loaded: THREE.Texture | null = null;
+    const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin('anonymous');
+    loader.load(url, (t) => {
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 8;
+      loaded = t;
+      if (alive) setTex(t); else t.dispose();
+    }, undefined, () => alive && setTex(null));
+    return () => { alive = false; loaded?.dispose(); };
+  }, [url]);
+  return tex;
+}
+
+/** The record. With album art it becomes a picture disc of the current cover, spinning while playing. */
+function Vinyl({ b, lit, playing, art }: { b: Box; lit: boolean; playing: boolean; art?: string }) {
   const t = useTheme();
   const spin = useRef<THREE.Group>(null);
   const motion = useMemo(() => !reduceMotion(), []);
+  const cover = useRemoteTexture(art);
+  const night = useNight();
   useFrame((_, dt) => {
     if (spin.current && motion && playing) spin.current.rotation.y -= Math.min(dt, 0.1) * 1.8;
   });
@@ -175,21 +291,41 @@ function Vinyl({ b, lit, playing }: { b: Box; lit: boolean; playing: boolean }) 
           <Surface color={t.lit ? '#2b2621' : t.face} />
           <Edges threshold={15} color={t.lit ? '#6b625a' : edge} />
         </mesh>
-        {[0.88, 0.72, 0.56].map((f) => (
-          <mesh key={f} position={[0, 0.245, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
-            <ringGeometry args={[r * f, r * f + 0.05, 64]} />
-            <meshBasicMaterial color={t.lit ? '#4d453e' : t.edge} transparent opacity={0.7} toneMapped={false} />
-          </mesh>
-        ))}
-        <mesh position={[0, 0.27, 0]}>
-          <cylinderGeometry args={[r * 0.34, r * 0.34, 0.05, 40]} />
-          <Surface color={t.lit ? '#e4572e' : t.face} />
-          <Edges threshold={15} color={edge} />
-        </mesh>
-        <mesh position={[r * 0.17, 0.305, 0]} raycast={() => null}>
-          <boxGeometry args={[r * 0.24, 0.02, 0.22]} />
-          <meshBasicMaterial color={t.lit ? '#fbf8f3' : t.edge} toneMapped={false} />
-        </mesh>
+        {cover ? (
+          <>
+            {/* picture disc: the album cover, cropped to a circle */}
+            <mesh position={[0, 0.245, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+              <circleGeometry args={[r * 0.97, 64]} />
+              {t.lit
+                ? night
+                  ? <meshBasicMaterial map={cover} toneMapped={false} /> /* stays bright in the dark */
+                  : <meshStandardMaterial map={cover} roughness={0.55} />
+                : <meshBasicMaterial map={cover} toneMapped={false} />}
+            </mesh>
+            <mesh position={[0, 0.25, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+              <circleGeometry args={[r * 0.05, 20]} />
+              <meshBasicMaterial color="#1a1714" toneMapped={false} />
+            </mesh>
+          </>
+        ) : (
+          <>
+            {[0.88, 0.72, 0.56].map((f) => (
+              <mesh key={f} position={[0, 0.245, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+                <ringGeometry args={[r * f, r * f + 0.05, 64]} />
+                <meshBasicMaterial color={t.lit ? '#4d453e' : t.edge} transparent opacity={0.7} toneMapped={false} />
+              </mesh>
+            ))}
+            <mesh position={[0, 0.27, 0]}>
+              <cylinderGeometry args={[r * 0.34, r * 0.34, 0.05, 40]} />
+              <Surface color={t.lit ? '#e4572e' : t.face} />
+              <Edges threshold={15} color={edge} />
+            </mesh>
+            <mesh position={[r * 0.17, 0.305, 0]} raycast={() => null}>
+              <boxGeometry args={[r * 0.24, 0.02, 0.22]} />
+              <meshBasicMaterial color={t.lit ? '#fbf8f3' : t.edge} toneMapped={false} />
+            </mesh>
+          </>
+        )}
       </group>
     </group>
   );
@@ -224,53 +360,31 @@ function Tonearm({ base, arm, lit, playing }: { base: Box; arm: Box; lit: boolea
   );
 }
 
-/** Current album cover printed on the record sleeve (covers the ♪ decal while art is available). */
-function AlbumArt({ sleeve, url }: { sleeve: Box; url: string }) {
-  const [tex, setTex] = useState<THREE.Texture | null>(null);
-  useEffect(() => {
-    let alive = true;
-    let loaded: THREE.Texture | null = null;
-    const loader = new THREE.TextureLoader();
-    loader.setCrossOrigin('anonymous');
-    loader.load(url, (t) => {
-      t.colorSpace = THREE.SRGBColorSpace;
-      t.anisotropy = 8;
-      loaded = t;
-      if (alive) setTex(t); else t.dispose();
-    }, undefined, () => alive && setTex(null));
-    return () => { alive = false; loaded?.dispose(); };
-  }, [url]);
-  if (!tex) return null;
-  const m = 0.35; // margin inside the sleeve edge
-  return (
-    <group position={[sleeve.x, sleeve.z, sleeve.y + sleeve.d]} rotation={[-(sleeve.rotX ?? 0) * DEG, 0, 0]}>
-      <mesh position={[sleeve.w / 2, sleeve.h / 2, 0.04]} raycast={() => null}>
-        <planeGeometry args={[sleeve.w - 2 * m, sleeve.h - 2 * m]} />
-        <meshBasicMaterial map={tex} toneMapped={false} />
-      </mesh>
-    </group>
-  );
-}
-
 /** Contribution skyline: one bar per day for the last N weeks. */
+const GH_GREENS = ['#0e4429', '#006d32', '#26a641', '#39d353'];
 function Skyline({ plinth, github, lit }: { plinth: Box; github: GithubStats | null; lit: boolean }) {
   const bars = useMemo(() => {
     const weeks = github?.weeks ?? [];
     const counts = weeks.flat().filter((c) => c > 0).sort((a, b) => a - b);
     const cap = Math.max(4, counts[Math.floor(counts.length * 0.9)] ?? 4);
-    const out: Box[] = [];
+    const out: { b: Box; glow?: string }[] = [];
     const cols = weeks.length;
     const pitchX = Math.min(1.15, (plinth.w - 1.2) / Math.max(cols, 1));
     weeks.forEach((week, col) => {
       week.forEach((c, row) => {
         if (c < 0) return; // future day
-        const h = 0.12 + (Math.min(c, cap) / cap) * 4.4;
-        out.push({ x: plinth.x + 0.6 + col * pitchX, y: plinth.y + 0.55 + row * 1.0, z: plinth.z + plinth.h, w: pitchX * 0.74, d: 0.8, h });
+        const k = Math.min(c, cap) / cap;
+        const h = 0.12 + k * 4.4;
+        out.push({
+          b: { x: plinth.x + 0.6 + col * pitchX, y: plinth.y + 0.55 + row * 1.0, z: plinth.z + plinth.h, w: pitchX * 0.74, d: 0.8, h },
+          // at night the bars glow in GitHub's contribution greens (busier day = brighter)
+          glow: c > 0 ? GH_GREENS[Math.min(GH_GREENS.length - 1, Math.floor(k * GH_GREENS.length))] : undefined,
+        });
       });
     });
     return out;
   }, [github, plinth]);
-  return <>{bars.map((b, i) => <Block key={i} b={b} lit={lit} />)}</>;
+  return <>{bars.map(({ b, glow }, i) => <Block key={i} b={b} lit={lit} glow={glow} />)}</>;
 }
 
 /** Plant: one leaf per ~3 days of current streak (max 6). */
@@ -279,16 +393,44 @@ const LEAVES: Box[] = [
   { x: 9.2, y: 6, z: 11.2, w: 2, d: 1.2, h: 1.2 }, { x: 11.8, y: 6, z: 12.4, w: 1.8, d: 1.2, h: 1.4 },
   { x: 7.9, y: 6, z: 10.1, w: 1.6, d: 1.2, h: 1 }, { x: 11.8, y: 6, z: 7.2, w: 2.2, d: 1.2, h: 1 },
 ];
+/** Commit-streak plant: one leaf per ~3 days of streak; wilts (stem leans, leaves droop and brown) at 0. */
 function Plant({ obj, streak, lit }: { obj: ShelfObj; streak: number; lit: boolean }) {
-  const ox = obj.boxes[0].x - 9; // bay offset (pot is at local x = 9)
+  const t = useTheme();
+  const stem = obj.boxes[2];
+  const ox = obj.boxes[0].x - 9; // offset from the leaf layout (designed for a pot at local x = 9)
   const oz = obj.boxes[0].z;
-  const n = Math.max(1, Math.min(LEAVES.length, Math.ceil(streak / 3)));
+  const wilted = streak === 0;
+  const n =wilted ? 4 : Math.max(1, Math.min(LEAVES.length, Math.ceil(streak / 3)));
+  const pivot: [number, number, number] = [stem.x + stem.w / 2, stem.z, stem.y + stem.d / 2]; // stem base (three coords)
+  const lean = useRef<THREE.Group>(null);
+  const motion = useMemo(() => !reduceMotion(), []);
+  useFrame((_, dt) => {
+    const g = lean.current;
+    if (g) g.rotation.z = motion ? THREE.MathUtils.damp(g.rotation.z, wilted ? -0.42 : 0, 3, dt) : wilted ? -0.42 : 0;
+  });
+  const dry = wilted && !lit ? (t.lit ? '#cdb98d' : undefined) : undefined;
+  const stemMid = stem.x + stem.w / 2;
   return (
-    <>
-      {LEAVES.slice(0, n).map((l, i) => (
-        <Block key={i} b={{ ...l, x: l.x + ox, z: l.z + oz }} lit={lit} />
-      ))}
-    </>
+    <group position={pivot}>
+      <group ref={lean}>
+        <group position={[-pivot[0], -pivot[1], -pivot[2]]}>
+          <Block b={stem} lit={lit} color={dry} />
+          {LEAVES.slice(0, n).map((l, i) => {
+            const b = { ...l, x: l.x + ox, z: l.z + oz };
+            if (!wilted) return <Block key={i} b={b} lit={lit} />;
+            // droop each leaf around the end that touches the stem
+            const left = b.x + b.w / 2 < stemMid;
+            const ax = left ? b.x + b.w : b.x;
+            const local: Box = { x: b.x - ax, y: -b.d / 2, z: -b.h / 2, w: b.w, d: b.d, h: b.h };
+            return (
+              <group key={i} position={[ax, b.z + b.h / 2, b.y + b.d / 2]} rotation={[0, 0, left ? 0.6 : -0.6]}>
+                <Block b={local} lit={lit} color={dry} />
+              </group>
+            );
+          })}
+        </group>
+      </group>
+    </group>
   );
 }
 
@@ -331,79 +473,9 @@ function Lamp({ obj, night }: { obj: ShelfObj; night: boolean }) {
             <circleGeometry args={[shade.w * 1.1, 40]} />
             <meshBasicMaterial color={WARM} transparent opacity={t.lit ? 0.22 : 0.18} depthWrite={false} blending={t.lit ? THREE.NormalBlending : THREE.AdditiveBlending} toneMapped={false} />
           </mesh>
-          {t.lit && <pointLight position={[cx, shade.z - 0.8, cz]} color={WARM} intensity={160} distance={34} decay={1.6} />}
+          {/* at night the lamp is the main light in the room, so it's brighter and reaches further */}
+          {t.lit && <pointLight position={[cx, shade.z - 0.8, cz]} color={WARM} intensity={night ? 300 : 160} distance={night ? 48 : 34} decay={1.6} />}
         </>
-      )}
-    </group>
-  );
-}
-
-/** Desk clock running on Singapore time; hover shows the time as text. */
-const sgTime = () => new Intl.DateTimeFormat('en-SG', { timeZone: 'Asia/Singapore', hour: 'numeric', minute: '2-digit' }).format(new Date());
-
-function Clock({ obj }: { obj: ShelfObj }) {
-  const t = useTheme();
-  const { mobile } = useLayout();
-  const [hover, setHover] = useState(false);
-  const [label, setLabel] = useState('');
-  const hour = useRef<THREE.Group>(null);
-  const minute = useRef<THREE.Group>(null);
-  const second = useRef<THREE.Group>(null);
-  const body = obj.boxes[0];
-  const cx = body.x + body.w / 2, cy = body.z + body.h / 2, front = body.y + body.d;
-  const r = Math.min(body.w, body.h) / 2 - 0.45;
-  const TAU = Math.PI * 2;
-
-  useFrame(() => {
-    const now = Date.now();
-    const sg = new Date(now + 8 * 3600_000); // Singapore: UTC+8, no daylight saving
-    const h = sg.getUTCHours(), m = sg.getUTCMinutes(), s = sg.getUTCSeconds();
-    if (hour.current) hour.current.rotation.z = -(((h % 12) + m / 60) / 12) * TAU;
-    if (minute.current) minute.current.rotation.z = -((m + s / 60) / 60) * TAU;
-    if (second.current) second.current.rotation.z = -(s / 60) * TAU;
-  });
-
-  const ink = hover ? t.accent : t.edge;
-  return (
-    <group
-      onPointerOver={(e) => { e.stopPropagation(); setHover(true); setLabel(sgTime()); }}
-      onPointerOut={() => setHover(false)}
-    >
-      {obj.boxes.map((b, i) => <Block key={i} b={b} lit={hover} />)}
-      <group position={[cx, cy, front + 0.04]}>
-        <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[r, r, 0.08, 48]} />
-          <Surface color={t.lit ? '#ffffff' : t.face} />
-          <Edges threshold={15} color={ink} />
-        </mesh>
-        {Array.from({ length: 12 }, (_, i) => {
-          const a = (i / 12) * TAU;
-          const len = i % 3 === 0 ? 0.5 : 0.25;
-          return (
-            <mesh key={i} position={[Math.sin(a) * (r - 0.2 - len / 2), Math.cos(a) * (r - 0.2 - len / 2), 0.06]} rotation={[0, 0, -a]} raycast={() => null}>
-              <boxGeometry args={[0.12, len, 0.02]} />
-              <meshBasicMaterial color={t.edge} toneMapped={false} />
-            </mesh>
-          );
-        })}
-        <group ref={hour} position={[0, 0, 0.08]}>
-          <mesh position={[0, r * 0.27, 0]}><boxGeometry args={[0.26, r * 0.54, 0.05]} /><meshBasicMaterial color={t.edge} toneMapped={false} /></mesh>
-        </group>
-        <group ref={minute} position={[0, 0, 0.12]}>
-          <mesh position={[0, r * 0.4, 0]}><boxGeometry args={[0.17, r * 0.8, 0.05]} /><meshBasicMaterial color={t.edge} toneMapped={false} /></mesh>
-        </group>
-        <group ref={second} position={[0, 0, 0.16]}>
-          <mesh position={[0, r * 0.38, 0]}><boxGeometry args={[0.06, r * 0.9, 0.04]} /><meshBasicMaterial color={t.lit ? '#e4572e' : t.accent} toneMapped={false} /></mesh>
-        </group>
-        <mesh position={[0, 0, 0.2]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.22, 0.22, 0.06, 20]} />
-          <meshBasicMaterial color={t.edge} toneMapped={false} />
-        </mesh>
-      </group>
-      {hover && !mobile && (
-        <Html position={[cx, body.z + body.h + 2.4, body.y + body.d / 2]} zIndexRange={[20, 0]} style={{ pointerEvents: 'none' }}>
-          <div className="tag3d">{label}<small>local time in Singapore</small></div>
-        </Html>
       )}
     </group>
   );
@@ -443,10 +515,31 @@ function Teddy({ obj }: { obj: ShelfObj }) {
 
 // ---------------------------------------------------------------- section objects
 
-type LiveProps = { github: GithubStats | null; nowPlaying: NowPlaying | null; weather: Weather | null };
+type LiveProps = { github: GithubStats | null; nowPlaying: NowPlaying | null; weather: Weather | null; night: boolean };
+
+/** Per-box glow colours for clay at night (decals light up separately via their `glow`). */
+function nightGlow(obj: ShelfObj, i: number, b: Box): string | undefined {
+  if (obj.id === 'skills' && i > 0) {
+    // RGB keyboard backlight: a rainbow sweep across the keys
+    const hue = Math.round(((b.x % BAY_W) / BAY_W) * 300 + 200) % 360;
+    return `hsl(${hue}, 90%, 62%)`;
+  }
+  if (obj.id === 'awards' && i >= 3) return '#ffcf3f'; // gold trophy cup + handles
+  return undefined;
+}
+const BAY_W = 30;
+
+/** Small coloured lights at night so the glowing things also light their surroundings. */
+const NIGHT_LIGHTS: Partial<Record<SectionId, { color: string; intensity: number; distance: number; at: (o: ShelfObj) => [number, number, number] }>> = {
+  terminal: { color: '#5cff9d', intensity: 70, distance: 20, at: (o) => { const s = o.boxes[1]; return [s.x + s.w / 2, s.z + s.h / 2, s.y + s.d + 2]; } },
+  skills: { color: '#b18cff', intensity: 45, distance: 18, at: (o) => { const k = o.boxes[0]; return [k.x + k.w / 2, k.z + 3, k.y + k.d / 2]; } },
+  experience: { color: '#ffd36b', intensity: 55, distance: 20, at: (o) => { const p = o.boxes[0]; return [p.x + p.w / 2, p.z + 6, p.y + p.d + 2]; } },
+};
 
 function ShelfItem({ obj, active, onPick, live }: { obj: ShelfObj; active: boolean; onPick: (id: SectionId) => void; live: LiveProps }) {
   const ref = useRef<THREE.Group>(null);
+  const flash = useRef(0); // lightning brightness, shared by <Lightning> and the cloud
+  const night = useNight();
   const [hover, setHover] = useState(false);
   const id = obj.id;
   const lit = Boolean(id) && (hover || active);
@@ -457,26 +550,30 @@ function ShelfItem({ obj, active, onPick, live }: { obj: ShelfObj; active: boole
 
   const parts: ReactNode[] = [];
   if (obj.kind === 'cloud') {
-    // box 0 positions the GLB; it only rains when it's raining in Singapore
+    // box 0 positions the GLB; it rains / thunders only when Singapore does
     const raining = live.weather?.raining ?? false;
-    parts.push(<Suspense key="glb" fallback={null}><GlbCloud base={obj.boxes[0]} lit={lit} raining={raining} /></Suspense>);
-    if (raining) parts.push(<Rain key="rain" base={obj.boxes[0]} />);
+    const thunder = live.weather?.thunder ?? false;
+    parts.push(<Suspense key="glb" fallback={null}><GlbCloud base={obj.boxes[0]} lit={lit} raining={raining || thunder} flash={flash} /></Suspense>);
+    if (raining || thunder) parts.push(<Rain key="rain" base={obj.boxes[0]} />);
+    if (thunder) parts.push(<Lightning key="bolt" base={obj.boxes[0]} flash={flash} />);
   } else {
     obj.boxes.forEach((b, i) => {
       if (obj.kind === 'record' && (i === 1 || i === 3)) return; // platter → vinyl, arm → animated tonearm
-      parts.push(<Block key={i} b={b} lit={lit} decals={decalsFor(obj, i)} />);
+      if (obj.kind === 'plant' && i === 2) return; // stem is drawn by <Plant> so it can wilt
+      parts.push(<Block key={i} b={b} lit={lit} decals={decalsFor(obj, i)} glow={nightGlow(obj, i, b)} />);
     });
   }
   if (obj.kind === 'record') {
     const np = live.nowPlaying;
     // plays while a track plays; before Spotify is connected it just plays for fun
     const playing = !np || !np.configured || np.isPlaying;
-    parts.push(<Vinyl key="vinyl" b={obj.boxes[1]} lit={lit} playing={playing} />);
+    parts.push(<Vinyl key="vinyl" b={obj.boxes[1]} lit={lit} playing={playing} art={np?.albumArt} />);
     parts.push(<Tonearm key="arm" base={obj.boxes[2]} arm={obj.boxes[3]} lit={lit} playing={playing} />);
-    if (np?.albumArt) parts.push(<AlbumArt key="art" sleeve={obj.boxes[5]} url={np.albumArt} />);
   }
   if (obj.kind === 'github') parts.push(<Skyline key="sky" plinth={obj.boxes[0]} github={live.github} lit={lit} />);
   if (obj.kind === 'plant') parts.push(<Plant key="plant" obj={obj} streak={live.github?.currentStreak ?? 9} lit={lit} />);
+  const nl = night && id ? NIGHT_LIGHTS[id] : undefined;
+  if (nl) parts.push(<pointLight key="nl" position={nl.at(obj)} color={nl.color} intensity={nl.intensity} distance={nl.distance} decay={1.6} />);
 
   const handlers = id
     ? {
@@ -490,16 +587,18 @@ function ShelfItem({ obj, active, onPick, live }: { obj: ShelfObj; active: boole
   const a = obj.anchor;
   const np = live.nowPlaying;
   const wx = live.weather;
-  const sub =
-    id === 'spotify' && np?.title ? `${np.isPlaying ? '▶' : 'last played:'} ${np.title} · ${np.artist}`
-    : id === 'cloud' && wx?.source === 'live' ? `${wx.raining ? 'raining' : 'dry'} in Singapore${wx.tempC != null ? ` · ${wx.tempC}°C` : ''}`
-    : id ? sectionById(id).kicker : '';
+  const subs: string[] = !id ? []
+    : id === 'spotify' && np?.title ? [`${np.isPlaying ? '▶' : 'last played:'} ${np.title} · ${np.artist}`]
+    : id === 'cloud' && wx?.source === 'live'
+      ? [sectionById(id).kicker, `${wx.thunder ? '⚡ thunderstorm' : wx.raining ? 'raining' : 'dry'} in Singapore${wx.tempC != null ? ` · ${wx.tempC}°C` : ''}`]
+    : id === 'streak' && live.github?.currentStreak === 0 ? ['wilting: no commits lately']
+    : [sectionById(id).kicker];
   return (
     <group ref={ref} {...handlers}>
       {obj.float ? <Float speed={1.6} rotationIntensity={0} floatIntensity={2.2} floatingRange={[-1.2, 1.6]}>{parts}</Float> : parts}
       {id && a && hover && !active && !mobile && (
         <Html position={[a[0], a[2] + 2, a[1]]} zIndexRange={[20, 0]} style={{ pointerEvents: 'none' }}>
-          <div className="tag3d">{sectionById(id).title} ↗<small>{sub}</small></div>
+          <div className="tag3d">{sectionById(id).title} ↗{subs.map((s) => <small key={s}>{s}</small>)}</div>
         </Html>
       )}
     </group>
@@ -507,9 +606,8 @@ function ShelfItem({ obj, active, onPick, live }: { obj: ShelfObj; active: boole
 }
 
 function ShelfObject(props: { obj: ShelfObj; active: boolean; onPick: (id: SectionId) => void; live: LiveProps }) {
-  if (props.obj.kind === 'lamp') return <Lamp obj={props.obj} night={props.live.weather ? !props.live.weather.isDay : false} />;
+  if (props.obj.kind === 'lamp') return <Lamp obj={props.obj} night={props.live.night} />;
   if (props.obj.kind === 'teddy') return <Teddy obj={props.obj} />;
-  if (props.obj.kind === 'clock') return <Clock obj={props.obj} />;
   return <ShelfItem {...props} />;
 }
 
@@ -672,14 +770,18 @@ export type ShelfCanvasProps = {
   github: GithubStats | null;
   nowPlaying: NowPlaying | null;
   weather?: Weather | null;
+  /** night in Singapore: lamp switches on; clay mode dims to a moonlit room */
+  night?: boolean;
   layout?: LayoutKey;
   /** phone layout only: total page height (px) needed to scroll through the shelf */
   onContentHeight?: (px: number) => void;
 };
 
-export default function ShelfCanvas({ theme: themeKey, activeId, onSelect, onMiss, github, nowPlaying, weather = null, layout = 'desktop', onContentHeight }: ShelfCanvasProps) {
+export default function ShelfCanvas({ theme: themeKey, activeId, onSelect, onMiss, github, nowPlaying, weather = null, night = false, layout = 'desktop', onContentHeight }: ShelfCanvasProps) {
   const theme = THEMES[themeKey];
-  const live = useMemo(() => ({ github, nowPlaying, weather }), [github, nowPlaying, weather]);
+  const live = useMemo(() => ({ github, nowPlaying, weather, night }), [github, nowPlaying, weather, night]);
+  // clay at night: dim, cool moonlight so the lamp becomes the main light (day = the original look)
+  const moon = theme.lit && night;
   const P = PREPARED[layout];
   const s = P.mobile ? 160 : 110; // shadow camera has to cover the taller phone shelf
   return (
@@ -694,15 +796,16 @@ export default function ShelfCanvas({ theme: themeKey, activeId, onSelect, onMis
     >
       <ThemeCtx.Provider value={theme}>
         <LayoutCtx.Provider value={P}>
-          <color attach="background" args={[theme.bg]} />
-          <ambientLight intensity={0.6} />
-          <hemisphereLight args={['#ffffff', '#d9cfc2', 0.7]} />
-          <directionalLight position={[-70, 150, 110]} intensity={2} castShadow={theme.lit} shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004} shadow-normalBias={0.05}>
+        <NightCtx.Provider value={moon}>
+          <color attach="background" args={[moon ? NIGHT_BG : theme.bg]} />
+          <ambientLight intensity={moon ? 0.32 : 0.6} />
+          <hemisphereLight key={moon ? 'n' : 'd'} args={moon ? ['#93a5c8', '#3a332c', 0.6] : ['#ffffff', '#d9cfc2', 0.7]} />
+          <directionalLight position={[-70, 150, 110]} intensity={moon ? 0.9 : 2} color={moon ? '#b4c6e6' : '#ffffff'} castShadow={theme.lit} shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004} shadow-normalBias={0.05}>
             <orthographicCamera key={layout} attach="shadow-camera" args={[-s, s, s, -s, 1, 600]} />
           </directionalLight>
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, P.groundY, 0]} receiveShadow visible={theme.lit}>
             <planeGeometry args={[800, 800]} />
-            <shadowMaterial opacity={0.12} />
+            <shadowMaterial opacity={moon ? 0.3 : 0.12} />
           </mesh>
 
           <Scene key={layout} activeId={activeId} onPick={onSelect} live={live} onContentHeight={onContentHeight} />
@@ -719,6 +822,7 @@ export default function ShelfCanvas({ theme: themeKey, activeId, onSelect, onMis
               maxPolarAngle={Math.PI * 0.42}
             />
           )}
+        </NightCtx.Provider>
         </LayoutCtx.Provider>
       </ThemeCtx.Provider>
     </Canvas>

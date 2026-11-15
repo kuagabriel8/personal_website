@@ -24,7 +24,8 @@ export const viewport: Viewport = {
 };
 
 // Runs before first paint so the saved theme never flashes the wrong colours.
-const themeScript = `(function(){try{var t=localStorage.getItem('theme');if(t!=='dark'&&t!=='clay'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'clay'}document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='dark'}})()`;
+// Also guesses day/night in Singapore (UTC+8) so clay mode opens in the right palette; the page refines it with real sunset data.
+const themeScript = `(function(){var d=document.documentElement;try{var t=localStorage.getItem('theme');if(t!=='dark'&&t!=='clay'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'clay'}d.dataset.theme=t}catch(e){d.dataset.theme='dark'}var h=new Date(Date.now()+288e5).getUTCHours();d.dataset.time=(h<7||h>=19)?'night':'day'})()`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

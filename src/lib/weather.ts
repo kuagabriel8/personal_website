@@ -26,6 +26,7 @@ export async function getWeather(): Promise<Weather> {
     return {
       source: 'live',
       raining: precipitation > 0 || RAIN_CODES.has(code),
+      thunder: code === 95 || code === 96 || code === 99,
       isDay: c.is_day === 1,
       precipitation,
       code,
@@ -33,6 +34,6 @@ export async function getWeather(): Promise<Weather> {
     };
   } catch (err) {
     console.error('[weather]', err);
-    return { source: 'fallback', raining: false, isDay: sgIsDay(), precipitation: 0, code: -1 };
+    return { source: 'fallback', raining: false, thunder: false, isDay: sgIsDay(), precipitation: 0, code: -1 };
   }
 }

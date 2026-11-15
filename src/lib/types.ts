@@ -10,6 +10,7 @@ export type GithubStats = {
 export type Weather = {
   source: 'live' | 'fallback';
   raining: boolean;
+  thunder: boolean; // thunderstorm right now
   isDay: boolean;
   precipitation: number; // mm in the last hour
   code: number; // WMO weather code

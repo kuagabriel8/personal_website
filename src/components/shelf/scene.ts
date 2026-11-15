@@ -20,8 +20,9 @@ export type Box = { x: number; y: number; z: number; w: number; d: number; h: nu
 export type Decal = {
   box: number; face: 'front' | 'top'; text?: string; size?: number; inset?: number; vertical?: boolean;
   windows?: { cols: number; rows: number }; // building facade: window grid, with `text` as a sign at the bottom
+  glow?: string; // clay at night: lights up in this colour (screens, signs, labels, lit windows)
 };
-export type Kind = 'record' | 'lamp' | 'github' | 'plant' | 'teddy' | 'cloud' | 'clock';
+export type Kind = 'record' | 'lamp' | 'github' | 'plant' | 'teddy' | 'cloud';
 
 export type ShelfObj = {
   id: SectionId | null; // null = decorative
@@ -63,7 +64,7 @@ function towers(): Pick<ShelfObj, 'boxes' | 'decals'> {
   experience.forEach((role, i) => {
     const s = spec[i % spec.length];
     const y = 2.6 + (5.2 - s.d) / 2;
-    decals.push({ box: boxes.length, face: 'front', text: role.spine, size: 0.78, windows: { cols: 3, rows: s.rows } });
+    decals.push({ box: boxes.length, face: 'front', text: role.spine, size: 0.78, windows: { cols: 3, rows: s.rows }, glow: '#ffd36b' });
     boxes.push(box(s.x, y, 0.8, s.w, s.d, s.h));
     boxes.push(box(s.x + s.w * 0.25, y + s.d * 0.25, 0.8 + s.h, s.w * 0.5, s.d * 0.5, 1)); // rooftop plant room
   });
@@ -71,12 +72,13 @@ function towers(): Pick<ShelfObj, 'boxes' | 'decals'> {
   return { boxes, decals };
 }
 
+const BINDER_GLOW = ['#ff7a59', '#ffd23f', '#5ad1ff', '#b18cff', '#5cff9d'];
 function binders(): Pick<ShelfObj, 'boxes' | 'decals'> {
   const boxes: Box[] = [];
   const decals: Decal[] = [];
   certs.forEach((c, i) => {
     boxes.push(box(2 + i * 3.7, 1.5, 0, 3.3, 9.5, 13));
-    decals.push({ box: i, face: 'front', inset: 0.45, text: c.code, size: 1.15, vertical: true });
+    decals.push({ box: i, face: 'front', inset: 0.45, text: c.code, size: 1.15, vertical: true, glow: BINDER_GLOW[i % BINDER_GLOW.length] });
   });
   boxes.push(box(21, 2, 0, 7, 8, 2.2)); // one lying flat
   return { boxes, decals };
@@ -92,7 +94,7 @@ export const OBJECTS: ShelfObj[] = [
   {
     id: 'projects', bay: 0, level: 3, anchor: [14, 6, 11],
     boxes: [box(6, 2, 0, 17, 8, 8), box(5.8, 1.8, 8, 17.4, 8.4, 1.4)],
-    decals: [{ box: 0, face: 'front', inset: 0.8, text: 'PROJECTS', size: 1.7 }],
+    decals: [{ box: 0, face: 'front', inset: 0.8, text: 'PROJECTS', size: 1.7, glow: '#ffb547' }],
   },
   { id: 'experience', bay: 0, level: 2, anchor: [9, 5, 16], ...towers() },
   {
@@ -101,29 +103,28 @@ export const OBJECTS: ShelfObj[] = [
       box(4, 3, 0, 6, 5, 1.2), box(5, 3.8, 1.2, 4, 3.4, 1.5), box(6.4, 5, 2.7, 1.2, 1, 2.2),
       box(5, 4, 4.9, 4, 3, 3.4), box(4.2, 5, 5.6, 0.8, 1, 1.8), box(9, 5, 5.6, 0.8, 1, 1.8),
     ],
-    decals: [{ box: 1, face: 'front', text: '★', size: 1.1 }],
+    decals: [{ box: 1, face: 'front', text: '★', size: 1.1, glow: '#ffd23f' }],
   },
   {
     id: 'blog', bay: 0, level: 1, anchor: [20, 6, 4],
     boxes: [box(15, 2.5, 0, 10, 7.5, 0.6), box(15.4, 2.8, 0.6, 9.4, 7, 0.6), box(15.1, 2.6, 1.2, 9.8, 7.3, 0.6)],
-    decals: [{ box: 2, face: 'top', inset: 0.6, text: 'BLOG · soon', size: 1.05 }],
+    decals: [{ box: 2, face: 'top', inset: 0.6, text: 'BLOG · soon', size: 1.05, glow: '#ff9f6b' }],
   },
 
   // ---- bay 1 ----
+  // record player, centred in its cubby: [plinth, platter (→ spinning vinyl), tonearm base, tonearm, knob]
   {
-    id: 'spotify', kind: 'record', bay: 1, level: 4, anchor: [12, 6, 6],
+    id: 'spotify', kind: 'record', bay: 1, level: 4, anchor: [15, 6, 6],
     boxes: [
-      box(4, 2, 0, 15, 9, 1.6), box(5.5, 2.75, 1.6, 7.5, 7.5, 0.4),
-      box(15, 3, 1.6, 2, 2, 1.2), box(15.6, 3.6, 2.8, 0.5, 5.5, 0.4), box(16.5, 8.5, 1.6, 1, 1, 0.5),
-      box(22, 4, 0, 6.5, 0.6, 6.5, { rotX: 12 }),
+      box(7.5, 2, 0, 15, 9, 1.6), box(9, 2.75, 1.6, 7.5, 7.5, 0.4),
+      box(18.5, 3, 1.6, 2, 2, 1.2), box(19.1, 3.6, 2.8, 0.5, 5.5, 0.4), box(20, 8.5, 1.6, 1, 1, 0.5),
     ],
-    decals: [{ box: 5, face: 'front', inset: 0.6, text: '♪', size: 2.4 }],
   },
   { id: 'skills', bay: 1, level: 3, anchor: [15, 6, 4], boxes: keyboard() },
   {
     id: 'terminal', bay: 1, level: 2, anchor: [14, 6, 12],
     boxes: [box(9.5, 3, 0, 9, 6, 1), box(8, 1.5, 1, 12, 9, 10)],
-    decals: [{ box: 1, face: 'front', inset: 1.2, text: '>_ whoami', size: 1.1 }],
+    decals: [{ box: 1, face: 'front', inset: 1.2, text: '>_ whoami', size: 1.1, glow: '#5cff9d' }],
   },
   { id: null, bay: 1, level: 2, boxes: [box(23, 5, 0, 3, 3, 3.6), box(26, 6, 1, 0.8, 1, 1.8)] }, // mug
   { id: 'certs', bay: 1, level: 1, anchor: [10, 5, 14], ...binders() },
@@ -139,41 +140,37 @@ export const OBJECTS: ShelfObj[] = [
   {
     id: 'about', bay: 2, level: 3, anchor: [12, 6, 14],
     boxes: [box(6, 5, 0, 11, 0.8, 13, { rotX: 10 })],
-    decals: [{ box: 0, face: 'front', inset: 1.2, text: 'hello.', size: 1.6 }],
+    decals: [{ box: 0, face: 'front', inset: 1.2, text: 'hello.', size: 1.6, glow: '#ff8fb1' }],
   },
   { id: null, kind: 'lamp', bay: 2, level: 3, boxes: [box(21, 4, 0, 4.4, 4.4, 0.8), box(22.8, 5.8, 0.8, 0.8, 0.8, 6), box(20.6, 3.6, 6.8, 5.2, 5.2, 3.4)] },
   {
-    id: 'streak', kind: 'plant', bay: 2, level: 2, anchor: [12, 7, 14],
-    boxes: [box(9, 4, 0, 5, 5, 4.5), box(8.6, 3.6, 4.5, 5.8, 5.8, 1), box(11.2, 6.2, 5.5, 0.6, 0.6, 6.5)],
+    // plant on the right, so a long streak's vine can spill over the front edge to the floor
+    id: 'streak', kind: 'plant', bay: 2, level: 2, anchor: [23, 7, 14],
+    boxes: [box(20.5, 4, 0, 5, 5, 4.5), box(20.1, 3.6, 4.5, 5.8, 5.8, 1), box(22.7, 6.2, 5.5, 0.6, 0.6, 6.5)],
   },
   {
     id: null, kind: 'teddy', bay: 2, level: 2,
     boxes: [
-      box(21, 4, 0, 5, 3.4, 4.6), // body
-      box(21, 6, 0, 1.6, 2.4, 1.4), box(24.4, 6, 0, 1.6, 2.4, 1.4), // legs
-      box(20.2, 4.8, 1.6, 0.8, 1.8, 2.2), box(26, 4.8, 1.6, 0.8, 1.8, 2.2), // arms
-      box(21.4, 4.2, 4.6, 4.2, 3.2, 3.4), // head
-      box(21.4, 5, 8, 1.2, 1, 1), box(24.4, 5, 8, 1.2, 1, 1), // ears
-      box(22.8, 7.4, 4.9, 1.4, 0.6, 1.0), // snout
+      box(7, 4, 0, 5, 3.4, 4.6), // body
+      box(7, 6, 0, 1.6, 2.4, 1.4), box(10.4, 6, 0, 1.6, 2.4, 1.4), // legs
+      box(6.2, 4.8, 1.6, 0.8, 1.8, 2.2), box(12, 4.8, 1.6, 0.8, 1.8, 2.2), // arms
+      box(7.4, 4.2, 4.6, 4.2, 3.2, 3.4), // head
+      box(7.4, 5, 8, 1.2, 1, 1), box(10.4, 5, 8, 1.2, 1, 1), // ears
+      box(8.8, 7.4, 4.9, 1.4, 0.6, 1.0), // snout
     ],
     decals: [{ box: 5, face: 'front', text: '•    •', size: 0.9 }],
   },
   {
     id: 'contact', bay: 2, level: 1, anchor: [12, 6, 3],
     boxes: [box(5, 2.5, 0, 13, 8, 0.5), box(6.5, 3, 0.5, 13, 8, 0.5)],
-    decals: [{ box: 1, face: 'top', inset: 0.7, text: 'say hi →', size: 1.3 }],
-  },
-  // desk clock showing Singapore time: [body, foot, foot, top knob]; face + hands are drawn by the renderer
-  {
-    id: null, kind: 'clock', bay: 2, level: 1,
-    boxes: [box(21.5, 5.2, 0.6, 5.2, 2.4, 5.2), box(22, 5.6, 0, 0.8, 1.6, 0.6), box(25.9, 5.6, 0, 0.8, 1.6, 0.6), box(23.5, 5.8, 5.8, 1.2, 1.2, 0.7)],
+    decals: [{ box: 1, face: 'top', inset: 0.7, text: 'say hi →', size: 1.3, glow: '#7fd3ff' }],
   },
 
   // ---- floor ----
   {
     id: 'resume', bay: 1, level: 'floor', anchor: [14.5, 13, 21],
     boxes: [box(8, 16, 0, 13, 0.8, 22, { rotX: 13 })],
-    decals: [{ box: 0, face: 'front', inset: 1.2, text: '_cv', size: 2.6 }],
+    decals: [{ box: 0, face: 'front', inset: 1.2, text: '_cv', size: 2.6, glow: '#ffe08a' }],
   },
 ];
 

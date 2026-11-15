@@ -9,7 +9,7 @@ export const sections: { id: SectionId; title: string; kicker: string; href?: st
   { id: 'experience', title: 'Experience', kicker: 'city block · one tower per company', href: '/resume#experience' },
   { id: 'resume', title: 'Résumé', kicker: 'leaning frame · the one-pager', href: '/resume' },
   { id: 'skills', title: 'Skills', kicker: 'keyboard · tech stack', href: '/resume#skills' },
-  { id: 'cloud', title: 'Cloud', kicker: 'floating · services I’ve used', href: '/resume#cloud' },
+  { id: 'cloud', title: 'Cloud', kicker: 'AWS · Azure · Supabase · Vercel', href: '/resume#cloud' },
   { id: 'certs', title: 'Certifications', kicker: 'binders · verified credentials', href: '/resume#certifications' },
   { id: 'github', title: 'GitHub', kicker: 'contribution skyline · live' },
   { id: 'streak', title: 'Commit streak', kicker: 'plant · grows with activity' },

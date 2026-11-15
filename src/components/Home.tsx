@@ -56,6 +56,18 @@ export default function Home() {
   const nowPlaying = useLive<NowPlaying>('/api/spotify', 20_000);
   const weather = useLive<Weather>('/api/weather', 10 * 60_000);
 
+  // night in Singapore: real sunset from the weather data, falling back to the clock (7pm–7am)
+  // seeded from the guess the <head> script made before paint, so a night visit never flashes the day palette
+  const [clockNight, setClockNight] = useState(() => typeof document !== 'undefined' && document.documentElement.dataset.time === 'night');
+  useEffect(() => {
+    const sgNight = () => { const h = new Date(Date.now() + 8 * 3600_000).getUTCHours(); return h < 7 || h >= 19; };
+    setClockNight(sgNight());
+    const t = setInterval(() => setClockNight(sgNight()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const night = weather?.source === 'live' ? !weather.isDay : clockNight;
+  useEffect(() => { document.documentElement.dataset.time = night ? 'night' : 'day'; }, [night]);
+
   // the theme was already applied before paint (layout.tsx); sync React state with it
   useEffect(() => {
     const t = document.documentElement.dataset.theme;
@@ -109,6 +121,7 @@ export default function Home() {
           github={github}
           nowPlaying={nowPlaying}
           weather={weather}
+          night={night}
           layout={mobile ? 'mobile' : 'desktop'}
           onContentHeight={setContentPx}
         />

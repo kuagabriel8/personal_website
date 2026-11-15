@@ -102,9 +102,11 @@ function Body({ id, live, onClose, onOpen }: { id: SectionId; live: Live; onClos
           <p className="lead">Platforms and services I’ve shipped with, and where I used each one.</p>
           {live.weather?.source === 'live' && (
             <p className="note" style={{ marginTop: -8, marginBottom: 24 }}>
-              {live.weather.raining
-                ? `It’s raining in Singapore right now${live.weather.tempC != null ? ` (${live.weather.tempC}°C)` : ''}, so the cloud is too.`
-                : `Dry in Singapore right now${live.weather.tempC != null ? ` (${live.weather.tempC}°C)` : ''}. The cloud only rains when Singapore does.`}
+              {live.weather.thunder
+                ? `Thunderstorm in Singapore right now${live.weather.tempC != null ? ` (${live.weather.tempC}°C)` : ''}. Watch the cloud.`
+                : live.weather.raining
+                  ? `It’s raining in Singapore right now${live.weather.tempC != null ? ` (${live.weather.tempC}°C)` : ''}, so the cloud is too.`
+                  : `Dry in Singapore right now${live.weather.tempC != null ? ` (${live.weather.tempC}°C)` : ''}. The cloud only rains when Singapore does.`}
             </p>
           )}
           <CloudList />
@@ -149,7 +151,11 @@ function Body({ id, live, onClose, onOpen }: { id: SectionId; live: Live; onClos
       const g = live.github;
       return (
         <>
-          <p className="lead">The plant grows a leaf for every few days of my current GitHub streak.</p>
+          <p className="lead">
+            {g?.source === 'live' && g.currentStreak === 0
+              ? 'It’s wilting: no commits in the last day or so. It perks back up with the next push.'
+              : 'The plant grows a leaf for every few days of my GitHub streak, and wilts if I stop committing.'}
+          </p>
           <ul className="rows">
             <li><span>current streak</span><span>{g ? `${g.currentStreak} days` : '–'}</span></li>
             <li><span>longest streak</span><span>{g ? `${g.longestStreak} days` : '–'}</span></li>
