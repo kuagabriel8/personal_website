@@ -173,7 +173,7 @@ export default function Home() {
 
       {desktopHint && !active && (
         <div className="desktop-hint" role="status">
-          <p><b>🖥️ psst, this shelf is way cooler on a desktop.</b> Lightning, teddy rain and a working terminal are waiting. Scroll around for now!</p>
+          <p><span aria-hidden="true">🖥️</span><b>Consider switching to desktop for the full 3D experience.</b></p>
           <button type="button" onClick={dismissDesktopHint}>got it</button>
         </div>
       )}

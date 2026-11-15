@@ -214,18 +214,20 @@ body.panel-open .switches { display: none; }
 
 /* phones only: one-time "better on desktop" nudge */
 .desktop-hint {
-  position: fixed; left: 16px; right: 16px; bottom: 60px; z-index: 25;
-  display: flex; align-items: center; gap: 12px;
-  background: var(--bg); color: var(--ink); border: 1px solid var(--ink); padding: 12px 14px;
+  position: fixed; left: 16px; right: 16px; top: 50%; z-index: 25;
+  max-width: 340px; margin: 0 auto; transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+  background: var(--bg); color: var(--ink); border: 1px solid var(--ink); padding: 20px 18px;
   box-shadow: 4px 4px 0 var(--ink);
   animation: hint-in 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
-.desktop-hint p { margin: 0; font-size: 13px; line-height: 1.45; }
+.desktop-hint p { margin: 0; font-size: 14px; line-height: 1.45; }
+.desktop-hint p span { display: block; font-size: 28px; margin-bottom: 6px; }
 .desktop-hint b { font-weight: 600; }
 .desktop-hint button {
-  flex: none; font: 12px var(--mono); color: var(--bg); background: var(--ink); border: 0; padding: 8px 12px; cursor: pointer;
+  flex: none; font: 12px var(--mono); color: var(--bg); background: var(--ink); border: 0; padding: 8px 16px; cursor: pointer;
 }
-@keyframes hint-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes hint-in { from { opacity: 0; transform: translateY(calc(-50% + 12px)); } to { opacity: 1; transform: translateY(-50%); } }
 @media (prefers-reduced-motion: reduce) { .desktop-hint { animation: none; } }
 
 @media (max-width: 700px) {
