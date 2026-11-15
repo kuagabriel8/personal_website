@@ -12,7 +12,7 @@ import { buildLayout, cubbyOf, type Box, type Decal, type LayoutKey, type ShelfL
 import { paintDecal } from './decal';
 import { THEMES, type Theme, type ThemeKey } from '../theme';
 import { sectionById, type SectionId } from '@/content/sections';
-import type { GithubStats, NowPlaying } from '@/lib/types';
+import type { GithubStats, NowPlaying, Weather } from '@/lib/types';
 
 const DEG = Math.PI / 180;
 const WARM = '#ffc861';
@@ -101,7 +101,42 @@ function Shelf() {
 const CLOUD_URL = '/models/cloud.glb';
 useGLTF.preload(CLOUD_URL);
 
-function GlbCloud({ base, lit }: { base: Box; lit: boolean }) {
+/** Rain under the cloud, only while it's actually raining in Singapore. */
+function Rain({ base }: { base: Box }) {
+  const t = useTheme();
+  const motion = useMemo(() => !reduceMotion(), []);
+  const drops = useMemo(
+    () => Array.from({ length: 26 }, (_, i) => ({
+      x: base.x + 1.5 + ((i * 7.3) % 17),
+      y: base.y + 2.6 + ((i * 1.9) % 3.6), // front half, so the cloud doesn't hide them
+      off: (i * 0.37) % 1,
+      speed: 1.1 + ((i * 13) % 5) / 8,
+    })),
+    [base],
+  );
+  const refs = useRef<(THREE.Mesh | null)[]>([]);
+  const top = base.z - 0.2; // just under the cloud
+  const bottom = base.z - 4 + 2; // stays clear of the board even while the cloud bobs down
+  useFrame(({ clock }) => {
+    const tt = clock.elapsedTime;
+    drops.forEach((d, i) => {
+      const m = refs.current[i];
+      if (m) m.position.y = top - (motion ? ((tt * d.speed + d.off) % 1) : d.off) * (top - bottom);
+    });
+  });
+  return (
+    <>
+      {drops.map((d, i) => (
+        <mesh key={i} ref={(m) => { refs.current[i] = m; }} position={[d.x, top, d.y]} raycast={() => null}>
+          <boxGeometry args={[0.2, 1.5, 0.2]} />
+          <meshBasicMaterial color={t.lit ? '#4f74a3' : t.edge} toneMapped={false} />
+        </mesh>
+      ))}
+    </>
+  );
+}
+
+function GlbCloud({ base, lit, raining = false }: { base: Box; lit: boolean; raining?: boolean }) {
   const t = useTheme();
   const { scene } = useGLTF(CLOUD_URL);
   const geometry = useMemo(() => {
@@ -112,7 +147,7 @@ function GlbCloud({ base, lit }: { base: Box; lit: boolean }) {
   if (!geometry) return null;
   return (
     <mesh geometry={geometry} position={[base.x + base.w / 2, base.z + 0.5, base.y + base.d / 2]} scale={0.8} castShadow receiveShadow>
-      <Surface color={lit ? t.hot : t.face} />
+      <Surface color={lit ? t.hot : raining && t.lit ? '#d9d4cc' : t.face} />
       <Outlines thickness={t.lit ? 2.5 : 1.5} color={lit ? t.accent : t.edge} />
     </mesh>
   );
@@ -257,9 +292,12 @@ function Plant({ obj, streak, lit }: { obj: ShelfObj; streak: number; lit: boole
   );
 }
 
-function Lamp({ obj }: { obj: ShelfObj }) {
+/** Desk lamp: switches itself on at night (Singapore time); a click overrides it until the next visit. */
+function Lamp({ obj, night }: { obj: ShelfObj; night: boolean }) {
   const t = useTheme();
-  const [on, setOn] = useState(false);
+  const [manual, setManual] = useState<boolean | null>(null);
+  const on = manual ?? night;
+  const setOn = (fn: (v: boolean) => boolean) => setManual(fn(on));
   const [hover, setHover] = useState(false);
   const [base, stem, shade] = obj.boxes;
   const cx = shade.x + shade.w / 2, cz = shade.y + shade.d / 2;
@@ -300,6 +338,77 @@ function Lamp({ obj }: { obj: ShelfObj }) {
   );
 }
 
+/** Desk clock running on Singapore time; hover shows the time as text. */
+const sgTime = () => new Intl.DateTimeFormat('en-SG', { timeZone: 'Asia/Singapore', hour: 'numeric', minute: '2-digit' }).format(new Date());
+
+function Clock({ obj }: { obj: ShelfObj }) {
+  const t = useTheme();
+  const { mobile } = useLayout();
+  const [hover, setHover] = useState(false);
+  const [label, setLabel] = useState('');
+  const hour = useRef<THREE.Group>(null);
+  const minute = useRef<THREE.Group>(null);
+  const second = useRef<THREE.Group>(null);
+  const body = obj.boxes[0];
+  const cx = body.x + body.w / 2, cy = body.z + body.h / 2, front = body.y + body.d;
+  const r = Math.min(body.w, body.h) / 2 - 0.45;
+  const TAU = Math.PI * 2;
+
+  useFrame(() => {
+    const now = Date.now();
+    const sg = new Date(now + 8 * 3600_000); // Singapore: UTC+8, no daylight saving
+    const h = sg.getUTCHours(), m = sg.getUTCMinutes(), s = sg.getUTCSeconds();
+    if (hour.current) hour.current.rotation.z = -(((h % 12) + m / 60) / 12) * TAU;
+    if (minute.current) minute.current.rotation.z = -((m + s / 60) / 60) * TAU;
+    if (second.current) second.current.rotation.z = -(s / 60) * TAU;
+  });
+
+  const ink = hover ? t.accent : t.edge;
+  return (
+    <group
+      onPointerOver={(e) => { e.stopPropagation(); setHover(true); setLabel(sgTime()); }}
+      onPointerOut={() => setHover(false)}
+    >
+      {obj.boxes.map((b, i) => <Block key={i} b={b} lit={hover} />)}
+      <group position={[cx, cy, front + 0.04]}>
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[r, r, 0.08, 48]} />
+          <Surface color={t.lit ? '#ffffff' : t.face} />
+          <Edges threshold={15} color={ink} />
+        </mesh>
+        {Array.from({ length: 12 }, (_, i) => {
+          const a = (i / 12) * TAU;
+          const len = i % 3 === 0 ? 0.5 : 0.25;
+          return (
+            <mesh key={i} position={[Math.sin(a) * (r - 0.2 - len / 2), Math.cos(a) * (r - 0.2 - len / 2), 0.06]} rotation={[0, 0, -a]} raycast={() => null}>
+              <boxGeometry args={[0.12, len, 0.02]} />
+              <meshBasicMaterial color={t.edge} toneMapped={false} />
+            </mesh>
+          );
+        })}
+        <group ref={hour} position={[0, 0, 0.08]}>
+          <mesh position={[0, r * 0.27, 0]}><boxGeometry args={[0.26, r * 0.54, 0.05]} /><meshBasicMaterial color={t.edge} toneMapped={false} /></mesh>
+        </group>
+        <group ref={minute} position={[0, 0, 0.12]}>
+          <mesh position={[0, r * 0.4, 0]}><boxGeometry args={[0.17, r * 0.8, 0.05]} /><meshBasicMaterial color={t.edge} toneMapped={false} /></mesh>
+        </group>
+        <group ref={second} position={[0, 0, 0.16]}>
+          <mesh position={[0, r * 0.38, 0]}><boxGeometry args={[0.06, r * 0.9, 0.04]} /><meshBasicMaterial color={t.lit ? '#e4572e' : t.accent} toneMapped={false} /></mesh>
+        </group>
+        <mesh position={[0, 0, 0.2]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.22, 0.22, 0.06, 20]} />
+          <meshBasicMaterial color={t.edge} toneMapped={false} />
+        </mesh>
+      </group>
+      {hover && !mobile && (
+        <Html position={[cx, body.z + body.h + 2.4, body.y + body.d / 2]} zIndexRange={[20, 0]} style={{ pointerEvents: 'none' }}>
+          <div className="tag3d">{label}<small>local time in Singapore</small></div>
+        </Html>
+      )}
+    </group>
+  );
+}
+
 /** Teddy bear: decorative, wobbles when clicked. */
 function Teddy({ obj }: { obj: ShelfObj }) {
   const t = useTheme();
@@ -334,7 +443,7 @@ function Teddy({ obj }: { obj: ShelfObj }) {
 
 // ---------------------------------------------------------------- section objects
 
-type LiveProps = { github: GithubStats | null; nowPlaying: NowPlaying | null };
+type LiveProps = { github: GithubStats | null; nowPlaying: NowPlaying | null; weather: Weather | null };
 
 function ShelfItem({ obj, active, onPick, live }: { obj: ShelfObj; active: boolean; onPick: (id: SectionId) => void; live: LiveProps }) {
   const ref = useRef<THREE.Group>(null);
@@ -348,9 +457,10 @@ function ShelfItem({ obj, active, onPick, live }: { obj: ShelfObj; active: boole
 
   const parts: ReactNode[] = [];
   if (obj.kind === 'cloud') {
-    // box 0 positions the GLB; boxes 1+ are rain drops
-    parts.push(<Suspense key="glb" fallback={null}><GlbCloud base={obj.boxes[0]} lit={lit} /></Suspense>);
-    obj.boxes.slice(1).forEach((b, i) => parts.push(<Block key={`r${i}`} b={b} lit={lit} />));
+    // box 0 positions the GLB; it only rains when it's raining in Singapore
+    const raining = live.weather?.raining ?? false;
+    parts.push(<Suspense key="glb" fallback={null}><GlbCloud base={obj.boxes[0]} lit={lit} raining={raining} /></Suspense>);
+    if (raining) parts.push(<Rain key="rain" base={obj.boxes[0]} />);
   } else {
     obj.boxes.forEach((b, i) => {
       if (obj.kind === 'record' && (i === 1 || i === 3)) return; // platter → vinyl, arm → animated tonearm
@@ -379,7 +489,11 @@ function ShelfItem({ obj, active, onPick, live }: { obj: ShelfObj; active: boole
   const { mobile } = useLayout();
   const a = obj.anchor;
   const np = live.nowPlaying;
-  const sub = id === 'spotify' && np?.title ? `${np.isPlaying ? '▶' : 'last played:'} ${np.title} · ${np.artist}` : id ? sectionById(id).kicker : '';
+  const wx = live.weather;
+  const sub =
+    id === 'spotify' && np?.title ? `${np.isPlaying ? '▶' : 'last played:'} ${np.title} · ${np.artist}`
+    : id === 'cloud' && wx?.source === 'live' ? `${wx.raining ? 'raining' : 'dry'} in Singapore${wx.tempC != null ? ` · ${wx.tempC}°C` : ''}`
+    : id ? sectionById(id).kicker : '';
   return (
     <group ref={ref} {...handlers}>
       {obj.float ? <Float speed={1.6} rotationIntensity={0} floatIntensity={2.2} floatingRange={[-1.2, 1.6]}>{parts}</Float> : parts}
@@ -393,8 +507,9 @@ function ShelfItem({ obj, active, onPick, live }: { obj: ShelfObj; active: boole
 }
 
 function ShelfObject(props: { obj: ShelfObj; active: boolean; onPick: (id: SectionId) => void; live: LiveProps }) {
-  if (props.obj.kind === 'lamp') return <Lamp obj={props.obj} />;
+  if (props.obj.kind === 'lamp') return <Lamp obj={props.obj} night={props.live.weather ? !props.live.weather.isDay : false} />;
   if (props.obj.kind === 'teddy') return <Teddy obj={props.obj} />;
+  if (props.obj.kind === 'clock') return <Clock obj={props.obj} />;
   return <ShelfItem {...props} />;
 }
 
@@ -556,14 +671,15 @@ export type ShelfCanvasProps = {
   onMiss: () => void;
   github: GithubStats | null;
   nowPlaying: NowPlaying | null;
+  weather?: Weather | null;
   layout?: LayoutKey;
   /** phone layout only: total page height (px) needed to scroll through the shelf */
   onContentHeight?: (px: number) => void;
 };
 
-export default function ShelfCanvas({ theme: themeKey, activeId, onSelect, onMiss, github, nowPlaying, layout = 'desktop', onContentHeight }: ShelfCanvasProps) {
+export default function ShelfCanvas({ theme: themeKey, activeId, onSelect, onMiss, github, nowPlaying, weather = null, layout = 'desktop', onContentHeight }: ShelfCanvasProps) {
   const theme = THEMES[themeKey];
-  const live = useMemo(() => ({ github, nowPlaying }), [github, nowPlaying]);
+  const live = useMemo(() => ({ github, nowPlaying, weather }), [github, nowPlaying, weather]);
   const P = PREPARED[layout];
   const s = P.mobile ? 160 : 110; // shadow camera has to cover the taller phone shelf
   return (

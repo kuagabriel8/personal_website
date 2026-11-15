@@ -186,6 +186,10 @@ body.panel-open .switches { display: none; }
 .shots { display: grid; gap: 14px; margin: 18px 0 0; }
 .shots img { border: 1px solid var(--hair); display: block; }
 .built li { margin-bottom: 10px; line-height: 1.55; }
+.nf { display: grid; grid-template-columns: minmax(180px, 300px) 1fr; gap: 40px; align-items: center; margin-top: 40px; }
+.nf-cubby { width: 100%; height: auto; overflow: visible; }
+.nf-cubby polygon { fill: var(--bg); stroke: var(--ink); stroke-width: 1; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+@media (max-width: 700px) { .nf { grid-template-columns: 1fr; gap: 16px; } .nf-cubby { max-width: 220px; } }
 .page-foot { margin-top: 72px; padding-top: 16px; border-top: 1px solid var(--hair); display: flex; gap: 18px; flex-wrap: wrap; font: 12px var(--mono); }
 .page-foot a { text-decoration: none; border-bottom: 1px solid var(--hair); }
 

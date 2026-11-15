@@ -21,7 +21,7 @@ export type Decal = {
   box: number; face: 'front' | 'top'; text?: string; size?: number; inset?: number; vertical?: boolean;
   windows?: { cols: number; rows: number }; // building facade: window grid, with `text` as a sign at the bottom
 };
-export type Kind = 'record' | 'lamp' | 'github' | 'plant' | 'teddy' | 'cloud';
+export type Kind = 'record' | 'lamp' | 'github' | 'plant' | 'teddy' | 'cloud' | 'clock';
 
 export type ShelfObj = {
   id: SectionId | null; // null = decorative
@@ -162,6 +162,11 @@ export const OBJECTS: ShelfObj[] = [
     id: 'contact', bay: 2, level: 1, anchor: [12, 6, 3],
     boxes: [box(5, 2.5, 0, 13, 8, 0.5), box(6.5, 3, 0.5, 13, 8, 0.5)],
     decals: [{ box: 1, face: 'top', inset: 0.7, text: 'say hi →', size: 1.3 }],
+  },
+  // desk clock showing Singapore time: [body, foot, foot, top knob]; face + hands are drawn by the renderer
+  {
+    id: null, kind: 'clock', bay: 2, level: 1,
+    boxes: [box(21.5, 5.2, 0.6, 5.2, 2.4, 5.2), box(22, 5.6, 0, 0.8, 1.6, 0.6), box(25.9, 5.6, 0, 0.8, 1.6, 0.6), box(23.5, 5.8, 5.8, 1.2, 1.2, 0.7)],
   },
 
   // ---- floor ----

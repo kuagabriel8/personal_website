@@ -8,11 +8,11 @@ import { site } from '@/content/site';
 import { projects } from '@/content/projects';
 import { experience, education, skills, cloud, certs } from '@/content/resume';
 import { about, awards, testimonials } from '@/content/about';
-import type { GithubStats, NowPlaying } from '@/lib/types';
+import type { GithubStats, NowPlaying, Weather } from '@/lib/types';
 import ContactForm from './ContactForm';
 import Terminal from './Terminal';
 
-type Live = { github: GithubStats | null; nowPlaying: NowPlaying | null };
+type Live = { github: GithubStats | null; nowPlaying: NowPlaying | null; weather: Weather | null };
 
 export default function Panel({ id, onClose, onOpen, live }: { id: SectionId | null; onClose: () => void; onOpen: (id: SectionId) => void; live: Live }) {
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -100,6 +100,13 @@ function Body({ id, live, onClose, onOpen }: { id: SectionId; live: Live; onClos
       return (
         <>
           <p className="lead">Platforms and services I’ve shipped with, and where I used each one.</p>
+          {live.weather?.source === 'live' && (
+            <p className="note" style={{ marginTop: -8, marginBottom: 24 }}>
+              {live.weather.raining
+                ? `It’s raining in Singapore right now${live.weather.tempC != null ? ` (${live.weather.tempC}°C)` : ''}, so the cloud is too.`
+                : `Dry in Singapore right now${live.weather.tempC != null ? ` (${live.weather.tempC}°C)` : ''}. The cloud only rains when Singapore does.`}
+            </p>
+          )}
           <CloudList />
         </>
       );

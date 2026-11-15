@@ -7,6 +7,15 @@ export type GithubStats = {
   longestStreak: number;
 };
 
+export type Weather = {
+  source: 'live' | 'fallback';
+  raining: boolean;
+  isDay: boolean;
+  precipitation: number; // mm in the last hour
+  code: number; // WMO weather code
+  tempC?: number;
+};
+
 export type NowPlaying = {
   configured: boolean;
   isPlaying: boolean;

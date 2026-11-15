@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { sections, type SectionId } from '@/content/sections';
 import { site } from '@/content/site';
-import type { GithubStats, NowPlaying } from '@/lib/types';
+import { track } from '@vercel/analytics';
+import type { GithubStats, NowPlaying, Weather } from '@/lib/types';
 import { THEME_STORAGE_KEY, type ThemeKey } from './theme';
 import Panel from './Panel';
 
@@ -53,6 +54,7 @@ export default function Home() {
     return () => mq.removeEventListener('change', sync);
   }, []);
   const nowPlaying = useLive<NowPlaying>('/api/spotify', 20_000);
+  const weather = useLive<Weather>('/api/weather', 10 * 60_000);
 
   // the theme was already applied before paint (layout.tsx); sync React state with it
   useEffect(() => {
@@ -66,7 +68,11 @@ export default function Home() {
     try { localStorage.setItem(THEME_STORAGE_KEY, t); } catch { /* private mode */ }
   };
 
-  const open = useCallback((id: SectionId) => { setActive(id); setListOpen(false); }, []);
+  const open = useCallback((id: SectionId) => {
+    setActive(id);
+    setListOpen(false);
+    track('shelf_open', { section: id }); // which objects people click (custom events need a Vercel Pro plan to show up)
+  }, []);
   const close = useCallback(() => setActive(null), []);
 
   useEffect(() => {
@@ -102,6 +108,7 @@ export default function Home() {
           onMiss={close}
           github={github}
           nowPlaying={nowPlaying}
+          weather={weather}
           layout={mobile ? 'mobile' : 'desktop'}
           onContentHeight={setContentPx}
         />
@@ -123,7 +130,7 @@ export default function Home() {
         </ol>
       </nav>
 
-      <Panel id={active} onClose={close} onOpen={open} live={{ github, nowPlaying }} />
+      <Panel id={active} onClose={close} onOpen={open} live={{ github, nowPlaying, weather }} />
 
       <div className="switches">
         <div className="seg" role="group" aria-label="Theme">
