@@ -8,6 +8,7 @@ import { site } from '@/content/site';
 import { projects } from '@/content/projects';
 import { experience, education, skills, cloud, certs } from '@/content/resume';
 import { about, awards, testimonials } from '@/content/about';
+import { now } from '@/content/now';
 import type { GithubStats, NowPlaying, Weather } from '@/lib/types';
 import ContactForm from './ContactForm';
 import Terminal from './Terminal';
@@ -206,17 +207,19 @@ function Body({ id, live, onClose, onOpen }: { id: SectionId; live: Live; onClos
           <p className="lead">{about.bio}</p>
           <div className="sec"><h3>Into right now</h3><ul className="chips">{about.intoNow.map((i) => <li key={i}>{i}</li>)}</ul></div>
           <div className="sec"><h3>Outside of code</h3><p style={{ margin: '8px 0 0', fontSize: 14 }}>{about.outside}</p></div>
-          {testimonials.length > 0 && (
-            <div className="sec">
-              <h3>Kind words</h3>
-              {testimonials.map((t) => (
-                <div className="quote" key={t.name}>
-                  <Image src={t.photo} alt={t.name} width={56} height={56} />
-                  <div><p>“{t.quote}”</p><span>{t.name}</span></div>
-                </div>
-              ))}
+        </>
+      );
+
+    case 'kindwords':
+      return (
+        <>
+          <p className="lead">A few nice things people have said.</p>
+          {testimonials.map((t) => (
+            <div className="quote" key={t.name}>
+              <Image src={t.photo} alt={t.name} width={56} height={56} />
+              <div><p>“{t.quote}”</p><span>{t.name}</span></div>
             </div>
-          )}
+          ))}
         </>
       );
 
@@ -237,6 +240,16 @@ function Body({ id, live, onClose, onOpen }: { id: SectionId; live: Live; onClos
             <li><span>github</span><a href={site.links.github} target="_blank" rel="noopener noreferrer">/{site.githubUsername} ↗</a></li>
           </ul>
           <ContactForm />
+        </>
+      );
+
+    case 'now':
+      return (
+        <>
+          <ul className="rows">
+            {now.items.map((n) => <li key={n.label}><span>{n.text}</span><span>{n.label}</span></li>)}
+          </ul>
+          <p className="note">updated {now.updated}</p>
         </>
       );
 

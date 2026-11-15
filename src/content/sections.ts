@@ -2,7 +2,7 @@
 
 export type SectionId =
   | 'projects' | 'experience' | 'github' | 'spotify' | 'skills' | 'cloud' | 'certs'
-  | 'about' | 'awards' | 'streak' | 'contact' | 'resume' | 'terminal' | 'blog';
+  | 'about' | 'awards' | 'streak' | 'contact' | 'resume' | 'terminal' | 'blog' | 'now' | 'kindwords';
 
 export const sections: { id: SectionId; title: string; kicker: string; href?: string }[] = [
   { id: 'projects', title: 'Projects', kicker: 'storage box · case studies', href: '/projects' },
@@ -15,6 +15,8 @@ export const sections: { id: SectionId; title: string; kicker: string; href?: st
   { id: 'streak', title: 'Commit streak', kicker: 'plant · grows with activity' },
   { id: 'spotify', title: 'Spotify', kicker: 'record player · now playing' },
   { id: 'about', title: 'About', kicker: 'framed · who I am', href: '/about' },
+  { id: 'now', title: 'Now', kicker: 'sticky note · what I’m up to' },
+  { id: 'kindwords', title: 'Kind words', kicker: 'little book · notes from people I know', href: '/about#kind-words' },
   { id: 'awards', title: 'Awards', kicker: 'trophy · competitions', href: '/about#awards' },
   { id: 'contact', title: 'Contact', kicker: 'letters · say hi' },
   { id: 'blog', title: 'Blog', kicker: 'magazines · coming soon' },

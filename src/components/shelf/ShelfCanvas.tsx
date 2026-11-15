@@ -577,6 +577,7 @@ function nightGlow(obj: ShelfObj, i: number, b: Box): string | undefined {
     return `hsl(${hue}, 90%, 62%)`;
   }
   if (obj.id === 'awards' && i >= 3) return '#ffcf3f'; // gold trophy cup + handles
+  if (obj.id === 'now') return '#ffe27a'; // the sticky note glows softly yellow
   return undefined;
 }
 const BAY_W = 30;
@@ -592,12 +593,14 @@ function ShelfItem({ obj, active, onPick, live }: { obj: ShelfObj; active: boole
   const ref = useRef<THREE.Group>(null);
   const flash = useRef(0); // lightning brightness, shared by <Lightning> and the cloud
   const night = useNight();
+  const theme = useTheme();
   const [hover, setHover] = useState(false);
   const id = obj.id;
   const lit = Boolean(id) && (hover || active);
 
   useFrame((_, dt) => {
-    if (ref.current) ref.current.position.y = THREE.MathUtils.damp(ref.current.position.y, lit ? 1.4 : 0, 10, dt);
+    // the sticky note only peels up a touch, so it doesn't float off the monitor
+    if (ref.current) ref.current.position.y = THREE.MathUtils.damp(ref.current.position.y, lit ? (id === 'now' ? 0.35 : 1.4) : 0, 10, dt);
   });
 
   const parts: ReactNode[] = [];
@@ -612,7 +615,7 @@ function ShelfItem({ obj, active, onPick, live }: { obj: ShelfObj; active: boole
     obj.boxes.forEach((b, i) => {
       if (obj.kind === 'record' && (i === 1 || i === 3)) return; // platter → vinyl, arm → animated tonearm
       if (obj.kind === 'plant' && i === 2) return; // stem is drawn by <Plant> so it can wilt
-      parts.push(<Block key={i} b={b} lit={lit} decals={decalsFor(obj, i)} glow={nightGlow(obj, i, b)} />);
+      parts.push(<Block key={i} b={b} lit={lit} decals={decalsFor(obj, i)} glow={nightGlow(obj, i, b)} color={theme.lit ? obj.tint : undefined} />);
     });
   }
   if (obj.kind === 'record') {

@@ -31,6 +31,7 @@ export type ShelfObj = {
   level: number | 'floor';
   anchor?: [number, number, number];
   float?: boolean;
+  tint?: string; // face colour in clay mode (e.g. the yellow sticky note); line art stays monochrome
   boxes: Box[];
   decals?: Decal[];
 };
@@ -131,6 +132,12 @@ export const OBJECTS: ShelfObj[] = [
     decals: [{ box: 1, face: 'front', inset: 1.2, text: '>_ whoami', size: 1.1, glow: '#5cff9d' }],
   },
   { id: null, bay: 1, level: 2, boxes: [box(23, 5, 0, 3, 3, 3.6), box(26, 6, 1, 0.8, 1, 1.8)] }, // mug
+  // "now" sticky note stuck to the top-right corner of the CRT, overlapping the bezel
+  {
+    id: 'now', bay: 1, level: 2, anchor: [18, 11, 12], tint: '#ffe27a',
+    boxes: [box(16.6, 10.5, 8.1, 2.9, 0.12, 2.9)],
+    decals: [{ box: 0, face: 'front', text: 'now:', size: 0.75 }],
+  },
   { id: 'certs', bay: 1, level: 1, anchor: [10, 5, 14], ...binders() },
 
   // ---- bay 2 ----
@@ -168,6 +175,12 @@ export const OBJECTS: ShelfObj[] = [
     id: 'contact', bay: 2, level: 1, anchor: [12, 6, 3],
     boxes: [box(5, 2.5, 0, 13, 8, 0.5), box(6.5, 3, 0.5, 13, 8, 0.5)],
     decals: [{ box: 1, face: 'top', inset: 0.7, text: 'say hi →', size: 1.3, glow: '#7fd3ff' }],
+  },
+  // little "kind words" book standing beside the letters (testimonials)
+  {
+    id: 'kindwords', bay: 2, level: 1, anchor: [24.5, 6, 9], tint: '#ecc3bb',
+    boxes: [box(22, 5, 0, 5.2, 1.3, 7, { rotX: 9 })],
+    decals: [{ box: 0, face: 'front', inset: 0.45, text: 'kind words ♥', size: 0.58, glow: '#ff8fb1' }],
   },
 
   // ---- floor ----

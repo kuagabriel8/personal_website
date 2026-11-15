@@ -26,7 +26,7 @@ export default function AboutPage() {
 
       {testimonials.length > 0 && (
         <>
-          <h2>Kind words</h2>
+          <h2 id="kind-words">Kind words</h2>
           {testimonials.map((t) => (
             <div className="quote" key={t.name}>
               <Image src={t.photo} alt={t.name} width={56} height={56} />
