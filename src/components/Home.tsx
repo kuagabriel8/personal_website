@@ -14,14 +14,24 @@ const ShelfCanvas = dynamic(() => import('./shelf/ShelfCanvas'), {
   loading: () => <div className="shelf-loading">loading shelf…</div>,
 });
 
+/** Fetch JSON now, optionally every `everyMs` while the tab is visible, and again whenever the tab regains focus. */
 function useLive<T>(url: string, everyMs = 0) {
   const [data, setData] = useState<T | null>(null);
   useEffect(() => {
     let alive = true;
     const load = () => fetch(url).then((r) => (r.ok ? r.json() : null)).then((d) => alive && d && setData(d)).catch(() => {});
     load();
-    const t = everyMs ? setInterval(load, everyMs) : undefined;
-    return () => { alive = false; if (t) clearInterval(t); };
+    if (!everyMs) return () => { alive = false; };
+    const t = setInterval(() => { if (document.visibilityState === 'visible') load(); }, everyMs);
+    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      alive = false;
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
   }, [url, everyMs]);
   return data;
 }
@@ -31,7 +41,7 @@ export default function Home() {
   const [active, setActive] = useState<SectionId | null>(null);
   const [listOpen, setListOpen] = useState(false);
   const github = useLive<GithubStats>('/api/github');
-  const nowPlaying = useLive<NowPlaying>('/api/spotify', 60_000);
+  const nowPlaying = useLive<NowPlaying>('/api/spotify', 20_000);
 
   // the theme was already applied before paint (layout.tsx); sync React state with it
   useEffect(() => {
@@ -91,7 +101,7 @@ export default function Home() {
         </ol>
       </nav>
 
-      <Panel id={active} onClose={close} live={{ github, nowPlaying }} />
+      <Panel id={active} onClose={close} onOpen={open} live={{ github, nowPlaying }} />
 
       <div className="switches">
         <div className="seg" role="group" aria-label="Theme">

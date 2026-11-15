@@ -18,7 +18,7 @@ export const sections: { id: SectionId; title: string; kicker: string; href?: st
   { id: 'awards', title: 'Awards', kicker: 'trophy · competitions', href: '/about#awards' },
   { id: 'contact', title: 'Contact', kicker: 'letters · say hi' },
   { id: 'blog', title: 'Blog', kicker: 'magazines · coming soon' },
-  { id: 'terminal', title: 'Terminal', kicker: 'crt · coming soon' },
+  { id: 'terminal', title: 'Terminal', kicker: 'crt · type help' },
 ];
 
 export const sectionById = (id: SectionId) => sections.find((s) => s.id === id)!;

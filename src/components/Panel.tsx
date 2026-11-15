@@ -10,13 +10,14 @@ import { experience, education, skills, cloud, certs } from '@/content/resume';
 import { about, awards, testimonials } from '@/content/about';
 import type { GithubStats, NowPlaying } from '@/lib/types';
 import ContactForm from './ContactForm';
+import Terminal from './Terminal';
 
 type Live = { github: GithubStats | null; nowPlaying: NowPlaying | null };
 
-export default function Panel({ id, onClose, live }: { id: SectionId | null; onClose: () => void; live: Live }) {
+export default function Panel({ id, onClose, onOpen, live }: { id: SectionId | null; onClose: () => void; onOpen: (id: SectionId) => void; live: Live }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    if (id) closeRef.current?.focus({ preventScroll: true });
+    if (id && id !== 'terminal') closeRef.current?.focus({ preventScroll: true }); // the terminal focuses its own input
   }, [id]);
 
   const section = id ? sectionById(id) : null;
@@ -30,14 +31,14 @@ export default function Panel({ id, onClose, live }: { id: SectionId | null; onC
           </div>
           <p className="kicker">{section.kicker}</p>
           <h2 className="panel-title">{section.title}</h2>
-          <Body id={section.id} live={live} />
+          <Body id={section.id} live={live} onClose={onClose} onOpen={onOpen} />
         </div>
       )}
     </aside>
   );
 }
 
-function Body({ id, live }: { id: SectionId; live: Live }): ReactNode {
+function Body({ id, live, onClose, onOpen }: { id: SectionId; live: Live; onClose: () => void; onOpen: (id: SectionId) => void }): ReactNode {
   switch (id) {
     case 'projects':
       return (
@@ -217,7 +218,7 @@ function Body({ id, live }: { id: SectionId; live: Live }): ReactNode {
       return <p className="lead">Writing is coming soon. Posts will live on Medium and show up here.</p>;
 
     case 'terminal':
-      return <p className="lead">A tiny working shell is coming soon. Until then: <code>whoami</code> → {site.name}, {site.title.toLowerCase()}.</p>;
+      return <Terminal onExit={onClose} onOpen={onOpen} />;
   }
 }
 
