@@ -23,3 +23,6 @@ next-env.d.ts
 .DS_Store
 Thumbs.db
 *.log
+
+# local résumé source (contains phone number), never publish
+src/assets/me/*.pdf

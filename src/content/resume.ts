@@ -15,11 +15,11 @@ export const experience: Role[] = [
     location: 'Singapore',
     spine: 'SYNAPXE',
     bullets: [
-      'Implemented the React frontend and AWS Bedrock backend for a RAG-powered AI chatbot that helps NHG nurses triage workplace issues and raise tickets to support teams; ran requirement gathering and user testing with nurses.',
-      "Built a serverless REST API (Azure Functions) for an AI observability dashboard aggregating token usage and user activity across 20+ GenAI apps serving 50k+ users, replacing the ops team's weekly manual log pulls.",
+      'Implemented the React frontend and AWS Bedrock AgentCore backend for a RAG agentic AI chatbot that helps NHG nurses triage workplace issues and raise tickets to support teams; ran requirement gathering and user testing with nurses.',
+      "Built a serverless REST API (Azure Functions) for an AI observability and governance dashboard aggregating token usage and user activity across 20+ GenAI apps serving 50k+ users, replacing the ops team's weekly manual log pulls.",
       'Audited Azure RBAC across 6 resource groups, revoking ~60 stale role assignments to enforce least-privilege access.',
     ],
-    tech: ['React', 'AWS Bedrock', 'RAG', 'Azure Functions', 'Azure RBAC'],
+    tech: ['React', 'AWS Bedrock AgentCore', 'RAG', 'Agentic AI', 'Azure Functions', 'Azure RBAC'],
   },
   {
     company: 'Monee',
@@ -67,7 +67,7 @@ export const cloud: CloudProvider[] = [
     provider: 'AWS',
     prefix: 'AWS',
     services: [
-      { name: 'Bedrock', where: 'Synapxe: RAG chatbot for NHG nurses' },
+      { name: 'Bedrock AgentCore', where: 'Synapxe: agentic RAG chatbot for NHG nurses' },
       { name: 'ECS Fargate', where: 'Tapau: runs the microservices in private subnets' },
       { name: 'ECR', where: 'Tapau: images deployed to ECS by digest' },
       { name: 'Application Load Balancer', where: 'Tapau: CloudFront → ALB → ECS' },
@@ -119,11 +119,11 @@ const cloudSkills = cloud
 export const skills: { group: string; items: string[] }[] = [
   { group: 'Languages', items: ['TypeScript', 'Python', 'Java', 'SQL', 'JavaScript', 'HTML', 'CSS'] },
   { group: 'Frontend', items: ['React', 'Next.js', 'UI/UX'] },
-  { group: 'Backend', items: ['Node.js / Express', 'REST APIs', 'RabbitMQ', 'asyncio', 'Keycloak (OIDC/JWT)', 'nginx'] },
+  { group: 'Backend', items: ['Node.js / Express', 'REST APIs', 'Serverless', 'RabbitMQ', 'asyncio', 'Keycloak (OIDC/JWT)', 'nginx'] },
   { group: 'Databases / data', items: ['PostgreSQL', 'MySQL', 'MongoDB', 'Supabase', 'Spark SQL', 'Liquibase'] },
   { group: 'Cloud', items: cloudSkills },
   { group: 'DevOps / tools', items: ['Docker', 'GitHub Actions', 'Terraform', 'Git', 'Linux', 'Vitest', 'Trivy'] },
-  { group: 'AI / LLM', items: ['RAG', 'AWS Bedrock', 'LangGraph', 'Prompt engineering', 'Claude', 'GitHub Copilot'] },
+  { group: 'AI / LLM', items: ['RAG', 'Agentic AI', 'AWS Bedrock AgentCore', 'LangGraph', 'LangChain', 'LangSmith', 'OpenAI GPT-4o', 'Prompt engineering', 'Claude', 'GitHub Copilot'] },
   { group: 'Practices', items: ['Microservices', 'Event-driven design', 'OOP', 'Agile', 'Scrum'] },
 ];
 

@@ -2,6 +2,7 @@ import type { StaticImageData } from 'next/image';
 import tapau1 from '@/assets/tapau/screenshot-1.png';
 import tapau2 from '@/assets/tapau/screenshot-2.png';
 import phs1 from '@/assets/phs/screenshot-1.png';
+import datePlannerGraph from '@/assets/date-planner/agent-graph.png';
 
 export type Project = {
   slug: string;
@@ -41,7 +42,7 @@ export const projects: Project[] = [
       },
       {
         label: 'CI/CD',
-        text: 'Path-filtered CI (typecheck, tests, Docker build, Trivy CVE scan, terraform validate) behind one required check. CD builds immutable SHA-tagged images, deploys to ECS by digest, rolls back automatically with a circuit breaker, and runs smoke tests. Keyless AWS auth via OIDC.',
+        text: 'Path-filtered CI (typecheck, tests, Docker build, Trivy CVE scan, terraform validate) behind one required check, so only changed services ship on every merge. CD builds immutable SHA-tagged images and does zero-downtime rolling deploys to ECS by digest, with circuit-breaker auto-rollback, smoke tests and SNS alerting. Keyless AWS auth via OIDC.',
       },
       {
         label: 'Auth & User Service',
@@ -76,6 +77,36 @@ export const projects: Project[] = [
     links: [],
     screenshots: [{ src: phs1, alt: 'Public Health Screening web app screenshot' }],
     tags: 'React · Node · MongoDB',
+  },
+  {
+    slug: 'ai-date-planner',
+    name: 'AI Date Planner',
+    oneLiner: "AI agent that plans dates in Singapore using live weather, Google Maps and web search, and remembers each user's preferences and date ideas",
+    problem:
+      'Planning a date means juggling the weather, venues and half-remembered ideas across different apps. The agent does it in one conversation, grounded in live Singapore data, and remembers what each person likes.',
+    role: 'Built the backend: the agent, its tools, long-term memory, tests and evaluation.',
+    stack: ['Python', 'LangGraph', 'LangChain', 'OpenAI GPT-4o', 'Trustcall', 'Postgres', 'Supabase', 'LangSmith', 'Docker', 'pytest'],
+    built: [
+      {
+        label: 'Grounded agent',
+        text: 'ReAct-style agent that grounds suggestions in live data instead of making them up: Singapore government (NEA) weather, haze and UV readings, Google Places for real venues, and Tavily web search. It picks the forecast that matches how far away the date is (2-hour, 24-hour or 4-day).',
+      },
+      {
+        label: 'Long-term memory',
+        text: 'Trustcall extracts a structured user profile (budget, interests, dietary restrictions, partner) and a date-idea list (idea → planned → booked → completed) from the conversation and saves both to Supabase Postgres, so the frontend can read them directly.',
+      },
+      {
+        label: 'Durable sessions',
+        text: 'Conversation state saved with LangGraph checkpointers in Postgres, so sessions survive restarts in production, plus a Docker Compose stack (Redis + Postgres) for testing in a prod-like setup.',
+      },
+      {
+        label: 'Testing & evaluation',
+        text: 'pytest suite for routing and every tool with mocked HTTP (respx). LangSmith tracing, with LLM-as-a-judge evaluation that scores tool selection and memory extraction separately from final-answer quality.',
+      },
+    ],
+    links: [{ label: 'Repository', href: 'https://github.com/kuagabriel8/date-planner-backend' }],
+    screenshots: [{ src: datePlannerGraph, alt: 'LangGraph diagram of the agent: the date_planner node routes to tools or to the update_date_ideas, update_instructions and update_profile memory nodes' }],
+    tags: 'LangGraph · GPT-4o · Postgres',
   },
 ];
 
