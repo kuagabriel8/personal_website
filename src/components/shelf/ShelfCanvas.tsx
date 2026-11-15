@@ -149,6 +149,35 @@ function Vinyl({ b, lit, playing }: { b: Box; lit: boolean; playing: boolean }) 
   );
 }
 
+/**
+ * Tonearm: pivots on its base. Swings onto the record (needle down) while playing,
+ * back to its rest beside the platter when paused.
+ */
+const ARM_PLAY = -50 * DEG; // swing toward the record (rest = 0, pointing to the front)
+function Tonearm({ base, arm, lit, playing }: { base: Box; arm: Box; lit: boolean; playing: boolean }) {
+  const swing = useRef<THREE.Group>(null);
+  const motion = useMemo(() => !reduceMotion(), []);
+  const pivot: [number, number, number] = [base.x + base.w / 2, base.z + base.h, base.y + base.d / 2];
+  const back = pivot[2] - arm.y; // how far the arm extends behind the pivot
+  const target = playing ? ARM_PLAY : 0;
+  useFrame((_, dt) => {
+    const g = swing.current;
+    if (!g) return;
+    g.rotation.y = motion ? THREE.MathUtils.damp(g.rotation.y, target, 4, dt) : target;
+  });
+  // arm + headshell in pivot space (x across, y = forward along the arm, z = up)
+  const armBox: Box = { x: -arm.w / 2, y: -back, z: 0, w: arm.w, d: arm.d, h: arm.h };
+  const head: Box = { x: -0.38, y: arm.d - back - 1, z: -0.42, w: 0.76, d: 1, h: 0.82 };
+  return (
+    <group position={pivot}>
+      <group ref={swing}>
+        <Block b={armBox} lit={lit} />
+        <Block b={head} lit={lit} />
+      </group>
+    </group>
+  );
+}
+
 /** Current album cover printed on the record sleeve (covers the ♪ decal while art is available). */
 function AlbumArt({ sleeve, url }: { sleeve: Box; url: string }) {
   const [tex, setTex] = useState<THREE.Texture | null>(null);
@@ -313,14 +342,16 @@ function ShelfItem({ obj, active, onPick, live }: { obj: ShelfObj; active: boole
     obj.boxes.slice(1).forEach((b, i) => parts.push(<Block key={`r${i}`} b={b} lit={lit} />));
   } else {
     obj.boxes.forEach((b, i) => {
-      if (obj.kind === 'record' && i === 1) return; // platter replaced by the vinyl
+      if (obj.kind === 'record' && (i === 1 || i === 3)) return; // platter → vinyl, arm → animated tonearm
       parts.push(<Block key={i} b={b} lit={lit} decals={decalsFor(obj, i)} />);
     });
   }
   if (obj.kind === 'record') {
     const np = live.nowPlaying;
-    // spins while a track plays; before Spotify is connected it just spins for fun
-    parts.push(<Vinyl key="vinyl" b={obj.boxes[1]} lit={lit} playing={!np || !np.configured || np.isPlaying} />);
+    // plays while a track plays; before Spotify is connected it just plays for fun
+    const playing = !np || !np.configured || np.isPlaying;
+    parts.push(<Vinyl key="vinyl" b={obj.boxes[1]} lit={lit} playing={playing} />);
+    parts.push(<Tonearm key="arm" base={obj.boxes[2]} arm={obj.boxes[3]} lit={lit} playing={playing} />);
     if (np?.albumArt) parts.push(<AlbumArt key="art" sleeve={obj.boxes[5]} url={np.albumArt} />);
   }
   if (obj.kind === 'github') parts.push(<Skyline key="sky" plinth={obj.boxes[0]} github={live.github} lit={lit} />);
