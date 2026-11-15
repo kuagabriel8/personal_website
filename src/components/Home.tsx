@@ -53,6 +53,22 @@ export default function Home() {
     mq.addEventListener('change', sync);
     return () => mq.removeEventListener('change', sync);
   }, []);
+
+  // phones: a one-time nudge that the shelf is best on a desktop
+  const DESKTOP_HINT_KEY = 'desktop-hint-dismissed';
+  const [desktopHint, setDesktopHint] = useState(false);
+  useEffect(() => {
+    if (!mobile) { setDesktopHint(false); return; }
+    let seen = false;
+    try { seen = localStorage.getItem(DESKTOP_HINT_KEY) === '1'; } catch { /* private mode */ }
+    if (seen) return;
+    const t = setTimeout(() => setDesktopHint(true), 1500); // let the shelf appear first
+    return () => clearTimeout(t);
+  }, [mobile]);
+  const dismissDesktopHint = () => {
+    setDesktopHint(false);
+    try { localStorage.setItem(DESKTOP_HINT_KEY, '1'); } catch { /* private mode */ }
+  };
   const nowPlaying = useLive<NowPlaying>('/api/spotify', 20_000);
   const weather = useLive<Weather>('/api/weather', 10 * 60_000);
 
@@ -154,6 +170,13 @@ export default function Home() {
         </div>
       </div>
       <p className="hint">{mobile ? 'scroll to explore · tap an object' : 'hover an object · click to open · esc to close'}</p>
+
+      {desktopHint && !active && (
+        <div className="desktop-hint" role="status">
+          <p><b>🖥️ psst, this shelf is way cooler on a desktop.</b> Lightning, teddy rain and a working terminal are waiting. Scroll around for now!</p>
+          <button type="button" onClick={dismissDesktopHint}>got it</button>
+        </div>
+      )}
     </>
   );
 }

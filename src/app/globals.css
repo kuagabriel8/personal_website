@@ -151,6 +151,12 @@ body.panel-open .switches { display: none; }
 .form button { justify-self: start; font: 12px var(--mono); color: var(--bg); background: var(--ink); border: 0; padding: 9px 14px; cursor: pointer; }
 .form button:disabled { opacity: 0.5; cursor: default; }
 .form-msg { font: 12px var(--mono); margin: 0; }
+.photo-field { display: flex; align-items: center; gap: 12px; min-height: 40px; }
+.photo-field img { width: 56px; height: 56px; object-fit: cover; border-radius: 50%; border: 1px solid var(--hair); }
+.photo-pick { display: block; cursor: pointer; font: 12px var(--mono); color: var(--ink); border: 1px dashed var(--hair); padding: 10px 12px; }
+.photo-pick:hover { border-color: var(--ink); }
+.photo-pick span { color: var(--muted); }
+.photo-pick input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .form-msg.err { color: var(--accent); }
 
 /* ---------- terminal (CRT easter egg): same colours in both themes ---------- */
@@ -205,6 +211,22 @@ body.panel-open .switches { display: none; }
 .page-foot a { text-decoration: none; border-bottom: 1px solid var(--hair); }
 
 .scroll-spacer { pointer-events: none; }
+
+/* phones only: one-time "better on desktop" nudge */
+.desktop-hint {
+  position: fixed; left: 16px; right: 16px; bottom: 60px; z-index: 25;
+  display: flex; align-items: center; gap: 12px;
+  background: var(--bg); color: var(--ink); border: 1px solid var(--ink); padding: 12px 14px;
+  box-shadow: 4px 4px 0 var(--ink);
+  animation: hint-in 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.desktop-hint p { margin: 0; font-size: 13px; line-height: 1.45; }
+.desktop-hint b { font-weight: 600; }
+.desktop-hint button {
+  flex: none; font: 12px var(--mono); color: var(--bg); background: var(--ink); border: 0; padding: 8px 12px; cursor: pointer;
+}
+@keyframes hint-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .desktop-hint { animation: none; } }
 
 @media (max-width: 700px) {
   .chrome, .page-head { padding: 14px 16px; }

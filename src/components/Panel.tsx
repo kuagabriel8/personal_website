@@ -11,6 +11,7 @@ import { about, awards, testimonials } from '@/content/about';
 import { now } from '@/content/now';
 import type { GithubStats, NowPlaying, Weather } from '@/lib/types';
 import ContactForm from './ContactForm';
+import KindWordsForm from './KindWordsForm';
 import Terminal from './Terminal';
 
 type Live = { github: GithubStats | null; nowPlaying: NowPlaying | null; weather: Weather | null };
@@ -220,6 +221,13 @@ function Body({ id, live, onClose, onOpen }: { id: SectionId; live: Live; onClos
               <div><p>“{t.quote}”</p><span>{t.name}</span></div>
             </div>
           ))}
+          <div className="sec" style={{ marginTop: 32 }}>
+            <h3>Leave some kind words</h3>
+            <p style={{ fontSize: 13.5, lineHeight: 1.5, margin: '8px 0 4px', color: 'var(--muted)' }}>
+              Know me? Write something in the book. It comes straight to me, and I add my favourites here.
+            </p>
+            <KindWordsForm />
+          </div>
         </>
       );
 
