@@ -69,6 +69,19 @@ function Body({ id, live, onClose, onOpen }: { id: SectionId; live: Live; onClos
           </div>
           <Experience />
           <div className="sec">
+            <h3>Projects</h3>
+            {projects.map((p) => (
+              <div className="item" key={p.slug}>
+                <div className="item-row"><Link href={`/projects/${p.slug}`}>{p.name} ↗</Link><span>{p.tags}</span></div>
+                <div className="item-sub">{p.oneLiner}</div>
+                <ul>
+                  <li>{p.role}</li>
+                  {p.outcome && <li>{p.outcome}</li>}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <div className="sec">
             <h3>Certifications</h3>
             {certs.map((c) => (
               <div className="item" key={c.name}><div className="item-row"><a href={c.href} target="_blank" rel="noopener noreferrer">{c.name}</a><span>{c.date}</span></div></div>

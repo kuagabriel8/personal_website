@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
+import Link from 'next/link';
 import PageShell from '@/components/PageShell';
+import { projects } from '@/content/projects';
 import { site } from '@/content/site';
 import { experience, education, skills, cloud, certs } from '@/content/resume';
 import { awards } from '@/content/about';
 
-export const metadata: Metadata = { title: 'Résumé', description: `${site.name}: experience, education, skills and certifications.` };
+export const metadata: Metadata = { title: 'Résumé', description: `${site.name}: experience, projects, education, skills and certifications.` };
 
 export default function ResumePage() {
   return (
@@ -19,6 +21,19 @@ export default function ResumePage() {
           <div className="item-row"><b>{r.company}: {r.title}</b><span>{r.dates}</span></div>
           <ul>{r.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul>
           <ul className="chips">{r.tech.map((t) => <li key={t}>{t}</li>)}</ul>
+        </div>
+      ))}
+
+      <h2 id="projects">Projects</h2>
+      {projects.map((p) => (
+        <div className="item" key={p.slug}>
+          <div className="item-row"><Link href={`/projects/${p.slug}`}><b>{p.name} ↗</b></Link><span>{p.tags}</span></div>
+          <div className="item-sub">{p.oneLiner}</div>
+          <ul>
+            <li>{p.role}</li>
+            {p.outcome && <li>{p.outcome}</li>}
+          </ul>
+          <ul className="chips">{p.stack.slice(0, 10).map((s) => <li key={s}>{s}</li>)}</ul>
         </div>
       ))}
 
