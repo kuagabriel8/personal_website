@@ -17,15 +17,12 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: dark)', color: '#0e0e0e' },
-    { media: '(prefers-color-scheme: light)', color: '#efe9df' },
-  ],
+  themeColor: '#efe9df', // clay is the default theme
 };
 
 // Runs before first paint so the saved theme never flashes the wrong colours.
 // Also guesses day/night in Singapore (UTC+8) so clay mode opens in the right palette; the page refines it with real sunset data.
-const themeScript = `(function(){var d=document.documentElement;try{var t=localStorage.getItem('theme');if(t!=='dark'&&t!=='clay'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'clay'}d.dataset.theme=t}catch(e){d.dataset.theme='dark'}var h=new Date(Date.now()+288e5).getUTCHours();d.dataset.time=(h<7||h>=19)?'night':'day'})()`;
+const themeScript = `(function(){var d=document.documentElement;try{var t=localStorage.getItem('theme');if(t!=='dark'&&t!=='clay'){t='clay'}d.dataset.theme=t}catch(e){d.dataset.theme='clay'}var h=new Date(Date.now()+288e5).getUTCHours();d.dataset.time=(h<7||h>=19)?'night':'day'})()`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

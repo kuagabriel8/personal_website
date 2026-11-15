@@ -38,7 +38,7 @@ function useLive<T>(url: string, everyMs = 0) {
 }
 
 export default function Home() {
-  const [theme, setTheme] = useState<ThemeKey>('dark');
+  const [theme, setTheme] = useState<ThemeKey>('clay');
   const [active, setActive] = useState<SectionId | null>(null);
   const [listOpen, setListOpen] = useState(false);
   const [mobile, setMobile] = useState(false);

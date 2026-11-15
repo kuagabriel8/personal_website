@@ -4,7 +4,7 @@ import PageShell from '@/components/PageShell';
 import { site } from '@/content/site';
 import { about, awards, testimonials } from '@/content/about';
 
-export const metadata: Metadata = { title: 'About', description: `About ${site.name}, ${site.title.toLowerCase()}.` };
+export const metadata: Metadata = { title: 'About', description: `About ${site.name}: ${site.title}.` };
 
 export default function AboutPage() {
   return (
