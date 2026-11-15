@@ -40,7 +40,18 @@ export default function Home() {
   const [theme, setTheme] = useState<ThemeKey>('dark');
   const [active, setActive] = useState<SectionId | null>(null);
   const [listOpen, setListOpen] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  const [contentPx, setContentPx] = useState(0);
   const github = useLive<GithubStats>('/api/github');
+
+  // phones get the single-bay, scroll-down shelf
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 700px)');
+    const sync = () => setMobile(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
   const nowPlaying = useLive<NowPlaying>('/api/spotify', 20_000);
 
   // the theme was already applied before paint (layout.tsx); sync React state with it
@@ -84,8 +95,19 @@ export default function Home() {
       </header>
 
       <main className="stage" aria-label="Shelf of portfolio sections. Use list view for a text version.">
-        <ShelfCanvas theme={theme} activeId={active} onSelect={open} onMiss={close} github={github} nowPlaying={nowPlaying} />
+        <ShelfCanvas
+          theme={theme}
+          activeId={active}
+          onSelect={open}
+          onMiss={close}
+          github={github}
+          nowPlaying={nowPlaying}
+          layout={mobile ? 'mobile' : 'desktop'}
+          onContentHeight={setContentPx}
+        />
       </main>
+      {/* phone: the canvas stays fixed; this gives the page its scroll height */}
+      {mobile && <div className="scroll-spacer" style={{ height: contentPx }} aria-hidden="true" />}
 
       <nav className="listview" hidden={!listOpen} aria-label="All sections">
         <ol>
@@ -111,7 +133,7 @@ export default function Home() {
           ))}
         </div>
       </div>
-      <p className="hint">hover an object · click to open · esc to close</p>
+      <p className="hint">{mobile ? 'scroll to explore · tap an object' : 'hover an object · click to open · esc to close'}</p>
     </>
   );
 }

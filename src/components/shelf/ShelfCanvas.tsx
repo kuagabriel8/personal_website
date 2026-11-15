@@ -8,21 +8,31 @@ import { createContext, Suspense, useCallback, useContext, useEffect, useMemo, u
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Edges, Float, Html, OrbitControls, Outlines, useGLTF } from '@react-three/drei';
-import { CENTER, cubbyOf, resolveObjects, shelfBoxes, type Box, type Decal, type ShelfObj } from './scene';
+import { buildLayout, cubbyOf, type Box, type Decal, type LayoutKey, type ShelfLayout, type ShelfObj } from './scene';
 import { paintDecal } from './decal';
 import { THEMES, type Theme, type ThemeKey } from '../theme';
 import { sectionById, type SectionId } from '@/content/sections';
 import type { GithubStats, NowPlaying } from '@/lib/types';
 
 const DEG = Math.PI / 180;
-const OBJS = resolveObjects();
-const SHELF = shelfBoxes();
-const [CX, CY, CZ] = CENTER;
-const OFFSET: [number, number, number] = [-CX, -CZ, -CY]; // centre the scene on the origin (three coords)
 const WARM = '#ffc861';
 
 const ThemeCtx = createContext<Theme>(THEMES.dark);
 const useTheme = () => useContext(ThemeCtx);
+
+// ---- layouts (desktop: 3 bays · mobile: one tall bay you scroll down) ----
+type Prepared = { layout: ShelfLayout; offset: [number, number, number]; all: THREE.Box3; groundY: number; mobile: boolean };
+
+function prepare(key: LayoutKey): Prepared {
+  const layout = buildLayout(key);
+  const [cx, cy, cz] = layout.center;
+  const offset: [number, number, number] = [-cx, -cz, -cy]; // centre the scene on the origin (three coords)
+  const all = new THREE.Box3();
+  for (const b of [...layout.shelf, ...layout.objs.flatMap((o) => o.boxes)]) all.union(toBox3(b, offset));
+  return { layout, offset, all, groundY: -cz, mobile: key === 'mobile' };
+}
+const LayoutCtx = createContext<Prepared | null>(null);
+const useLayout = () => useContext(LayoutCtx)!;
 
 const reduceMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const stop = (e: ThreeEvent<PointerEvent>) => e.stopPropagation();
@@ -78,9 +88,10 @@ function Block({ b, decals = [], lit = false, shelf = false, color }: { b: Box; 
 const decalsFor = (o: ShelfObj, i: number) => (o.decals ?? []).filter((d) => d.box === i);
 
 function Shelf() {
+  const { layout } = useLayout();
   return (
     <group onPointerOver={stop} onPointerMove={stop}>
-      {SHELF.map((b, i) => <Block key={i} b={b} shelf />)}
+      {layout.shelf.map((b, i) => <Block key={i} b={b} shelf />)}
     </group>
   );
 }
@@ -365,13 +376,14 @@ function ShelfItem({ obj, active, onPick, live }: { obj: ShelfObj; active: boole
       }
     : { onPointerOver: stop };
 
+  const { mobile } = useLayout();
   const a = obj.anchor;
   const np = live.nowPlaying;
   const sub = id === 'spotify' && np?.title ? `${np.isPlaying ? '▶' : 'last played:'} ${np.title} · ${np.artist}` : id ? sectionById(id).kicker : '';
   return (
     <group ref={ref} {...handlers}>
       {obj.float ? <Float speed={1.6} rotationIntensity={0} floatIntensity={2.2} floatingRange={[-1.2, 1.6]}>{parts}</Float> : parts}
-      {id && a && hover && !active && (
+      {id && a && hover && !active && !mobile && (
         <Html position={[a[0], a[2] + 2, a[1]]} zIndexRange={[20, 0]} style={{ pointerEvents: 'none' }}>
           <div className="tag3d">{sectionById(id).title} ↗<small>{sub}</small></div>
         </Html>
@@ -395,17 +407,16 @@ const RIGHT = new THREE.Vector3().crossVectors(FWD, new THREE.Vector3(0, 1, 0)).
 const UP = new THREE.Vector3().crossVectors(RIGHT, FWD);
 const TOP = new THREE.Vector3(0, 1, 0.05).normalize(); // intro start: straight down
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-const toBox3 = (c: Box) => new THREE.Box3(
-  new THREE.Vector3(c.x + OFFSET[0], c.z + OFFSET[1], c.y + OFFSET[2]),
-  new THREE.Vector3(c.x + c.w + OFFSET[0], c.z + c.h + OFFSET[1], c.y + c.d + OFFSET[2]),
-);
-const ALL = (() => {
-  const b = new THREE.Box3();
-  for (const x of [...SHELF, ...OBJS.flatMap((o) => o.boxes)]) b.union(toBox3(x));
-  return b;
-})();
+function toBox3(c: Box, offset: [number, number, number]) {
+  return new THREE.Box3(
+    new THREE.Vector3(c.x + offset[0], c.z + offset[1], c.y + offset[2]),
+    new THREE.Vector3(c.x + c.w + offset[0], c.z + c.h + offset[1], c.y + c.d + offset[2]),
+  );
+}
+const PREPARED: Record<LayoutKey, Prepared> = { desktop: prepare('desktop'), mobile: prepare('mobile') };
 
-function framing(box: THREE.Box3, size: { width: number; height: number }, pad: number) {
+/** Extent of a box in iso screen space (RIGHT / UP axes). */
+function isoExtent(box: THREE.Box3) {
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
   const c = new THREE.Vector3();
   for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
@@ -413,6 +424,22 @@ function framing(box: THREE.Box3, size: { width: number; height: number }, pad: 
     const px = c.dot(RIGHT), py = c.dot(UP);
     x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
   }
+  return { x0, x1, y0, y1 };
+}
+
+const MOBILE_HEADER = 96; // px kept clear above the shelf
+const MOBILE_FOOTER = 72; // px below it
+
+/** Phone: fit the bay's width; the page scrolls and the camera moves down the shelf 1:1 with it. */
+function mobileFraming(all: THREE.Box3, size: { width: number; height: number }) {
+  const { x0, x1, y0, y1 } = isoExtent(all);
+  const zoom = size.width / ((x1 - x0) * 1.06);
+  const top = new THREE.Vector3().addScaledVector(RIGHT, (x0 + x1) / 2).addScaledVector(UP, y1 - (size.height / 2 - MOBILE_HEADER) / zoom);
+  return { zoom, top, contentPx: Math.ceil((y1 - y0) * zoom + MOBILE_HEADER + MOBILE_FOOTER) };
+}
+
+function framing(box: THREE.Box3, size: { width: number; height: number }, pad: number) {
+  const { x0, x1, y0, y1 } = isoExtent(box);
   const header = size.width < 700 ? 90 : 130;
   const zoom = Math.min(size.width / ((x1 - x0) * pad), (size.height - header) / ((y1 - y0) * pad));
   const target = new THREE.Vector3().addScaledVector(RIGHT, (x0 + x1) / 2).addScaledVector(UP, (y0 + y1) / 2 + 30 / zoom);
@@ -422,12 +449,18 @@ function framing(box: THREE.Box3, size: { width: number; height: number }, pad: 
 type Flight = { t: number; dur: number; intro?: boolean; fromT: THREE.Vector3; toT: THREE.Vector3; fromZ: number; toZ: number; fromDir: THREE.Vector3 };
 type OrbitLike = { target: THREE.Vector3; update: () => void; enabled: boolean };
 
-function Scene({ activeId, onPick, live }: { activeId: SectionId | null; onPick: (id: SectionId) => void; live: LiveProps }) {
+function Scene({ activeId, onPick, live, onContentHeight }: { activeId: SectionId | null; onPick: (id: SectionId) => void; live: LiveProps; onContentHeight?: (px: number) => void }) {
   const { camera, size } = useThree();
   const controls = useThree((s) => s.controls) as unknown as OrbitLike | null;
   const cam = camera as THREE.OrthographicCamera;
+  const P = useLayout();
+  const ALL = P.all;
   const fly = useRef<Flight | null>(null);
   const current = useRef({ box: ALL, pad: 1.08 });
+
+  // phone: camera follows the page scroll; tell the page how tall to be
+  const mob = useMemo(() => (P.mobile ? mobileFraming(ALL, size) : null), [P.mobile, ALL, size]);
+  useEffect(() => { if (mob) onContentHeight?.(mob.contentPx); }, [mob, onContentHeight]);
 
   const frameBox = useCallback((box: THREE.Box3, pad: number, instant = false) => {
     current.current = { box, pad };
@@ -447,6 +480,7 @@ function Scene({ activeId, onPick, live }: { activeId: SectionId | null; onPick:
   // intro on first load, then refit on resize
   const introStarted = useRef(false);
   useEffect(() => {
+    if (P.mobile) return; // phone framing is driven by scroll in useFrame
     if (!introStarted.current) {
       introStarted.current = true;
       if (!reduceMotion()) {
@@ -467,13 +501,22 @@ function Scene({ activeId, onPick, live }: { activeId: SectionId | null; onPick:
   const prevActive = useRef<SectionId | null>(null);
   useEffect(() => {
     if (activeId === prevActive.current) return;
-    const obj = activeId ? OBJS.find((o) => o.id === activeId) : null;
-    if (obj) frameBox(toBox3(cubbyOf(obj)), 1.25);
-    else if (prevActive.current) frameBox(ALL, 1.08);
     prevActive.current = activeId;
-  }, [activeId, frameBox]);
+    if (P.mobile) return; // on phones the panel covers the screen; no camera move needed
+    const obj = activeId ? P.layout.objs.find((o) => o.id === activeId) : null;
+    if (obj) frameBox(toBox3(cubbyOf(obj), P.offset), 1.25);
+    else frameBox(ALL, 1.08);
+  }, [activeId, frameBox, P, ALL]);
 
   useFrame((_, delta) => {
+    if (mob) {
+      // scroll 1px → camera moves 1px down the shelf, like a normal page
+      const target = mob.top.clone().addScaledVector(UP, -window.scrollY / mob.zoom);
+      cam.position.copy(target).addScaledVector(ISO, DIST);
+      cam.lookAt(target);
+      if (cam.zoom !== mob.zoom) { cam.zoom = mob.zoom; cam.updateProjectionMatrix(); }
+      return;
+    }
     const f = fly.current;
     if (!f || (!f.intro && !controls)) return;
     f.t = Math.min(1, f.t + Math.min(delta, 0.1) / f.dur); // slow frames slow it down, never skip it
@@ -495,9 +538,9 @@ function Scene({ activeId, onPick, live }: { activeId: SectionId | null; onPick:
   });
 
   return (
-    <group position={OFFSET}>
+    <group position={P.offset}>
       <Shelf />
-      {OBJS.map((o, i) => (
+      {P.layout.objs.map((o, i) => (
         <ShelfObject key={i} obj={o} active={activeId !== null && o.id === activeId} onPick={onPick} live={live} />
       ))}
     </group>
@@ -513,11 +556,16 @@ export type ShelfCanvasProps = {
   onMiss: () => void;
   github: GithubStats | null;
   nowPlaying: NowPlaying | null;
+  layout?: LayoutKey;
+  /** phone layout only: total page height (px) needed to scroll through the shelf */
+  onContentHeight?: (px: number) => void;
 };
 
-export default function ShelfCanvas({ theme: themeKey, activeId, onSelect, onMiss, github, nowPlaying }: ShelfCanvasProps) {
+export default function ShelfCanvas({ theme: themeKey, activeId, onSelect, onMiss, github, nowPlaying, layout = 'desktop', onContentHeight }: ShelfCanvasProps) {
   const theme = THEMES[themeKey];
   const live = useMemo(() => ({ github, nowPlaying }), [github, nowPlaying]);
+  const P = PREPARED[layout];
+  const s = P.mobile ? 160 : 110; // shadow camera has to cover the taller phone shelf
   return (
     <Canvas
       orthographic
@@ -526,30 +574,36 @@ export default function ShelfCanvas({ theme: themeKey, activeId, onSelect, onMis
       dpr={[1, 2]}
       camera={{ position: [-300, 300, 300], zoom: 5, near: 1, far: 2000 }}
       onPointerMissed={onMiss}
+      style={P.mobile ? { touchAction: 'pan-y' } : undefined}
     >
       <ThemeCtx.Provider value={theme}>
-        <color attach="background" args={[theme.bg]} />
-        <ambientLight intensity={0.6} />
-        <hemisphereLight args={['#ffffff', '#d9cfc2', 0.7]} />
-        <directionalLight position={[-70, 150, 110]} intensity={2} castShadow={theme.lit} shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004} shadow-normalBias={0.05}>
-          <orthographicCamera attach="shadow-camera" args={[-110, 110, 110, -110, 1, 500]} />
-        </directionalLight>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -CZ, 0]} receiveShadow visible={theme.lit}>
-          <planeGeometry args={[800, 800]} />
-          <shadowMaterial opacity={0.12} />
-        </mesh>
+        <LayoutCtx.Provider value={P}>
+          <color attach="background" args={[theme.bg]} />
+          <ambientLight intensity={0.6} />
+          <hemisphereLight args={['#ffffff', '#d9cfc2', 0.7]} />
+          <directionalLight position={[-70, 150, 110]} intensity={2} castShadow={theme.lit} shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004} shadow-normalBias={0.05}>
+            <orthographicCamera key={layout} attach="shadow-camera" args={[-s, s, s, -s, 1, 600]} />
+          </directionalLight>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, P.groundY, 0]} receiveShadow visible={theme.lit}>
+            <planeGeometry args={[800, 800]} />
+            <shadowMaterial opacity={0.12} />
+          </mesh>
 
-        <Scene activeId={activeId} onPick={onSelect} live={live} />
+          <Scene key={layout} activeId={activeId} onPick={onSelect} live={live} onContentHeight={onContentHeight} />
 
-        <OrbitControls
-          makeDefault
-          enablePan={false}
-          enableDamping
-          minAzimuthAngle={-Math.PI * 0.45}
-          maxAzimuthAngle={-Math.PI * 0.05}
-          minPolarAngle={Math.PI * 0.2}
-          maxPolarAngle={Math.PI * 0.42}
-        />
+          {/* phones scroll the page instead of orbiting (OrbitControls would also block touch scrolling) */}
+          {!P.mobile && (
+            <OrbitControls
+              makeDefault
+              enablePan={false}
+              enableDamping
+              minAzimuthAngle={-Math.PI * 0.45}
+              maxAzimuthAngle={-Math.PI * 0.05}
+              minPolarAngle={Math.PI * 0.2}
+              maxPolarAngle={Math.PI * 0.42}
+            />
+          )}
+        </LayoutCtx.Provider>
       </ThemeCtx.Provider>
     </Canvas>
   );

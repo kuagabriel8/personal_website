@@ -172,28 +172,54 @@ export const OBJECTS: ShelfObj[] = [
   },
 ];
 
-/** Resolve objects into world coordinates. */
-export function resolveObjects(): ShelfObj[] {
-  return OBJECTS.map((o) => {
+// ---------------------------------------------------------------- layouts
+
+export type LayoutKey = 'desktop' | 'mobile';
+
+export type ShelfLayout = {
+  key: LayoutKey;
+  bays: number;
+  levels: number;
+  objs: ShelfObj[]; // world coordinates
+  shelf: Box[]; // boards + posts
+  center: [number, number, number];
+};
+
+/**
+ * Phone layout: one tall bay, one cubby per level, read top → bottom.
+ * Keys are the desktop "bay:level" of each cubby; the floor frame stays at the bottom.
+ */
+const MOBILE_ORDER = ['2:4', '0:3', '0:2', '1:3', '1:1', '0:4', '1:4', '2:3', '0:1', '2:2', '1:2', '2:1'];
+
+export function buildLayout(key: LayoutKey): ShelfLayout {
+  let bays = BAYS;
+  let levels = LEVELS;
+  let placed = OBJECTS;
+  if (key === 'mobile') {
+    bays = 1;
+    levels = MOBILE_ORDER.length + 1;
+    placed = OBJECTS.map((o) =>
+      o.level === 'floor' ? { ...o, bay: 0 } : { ...o, bay: 0, level: MOBILE_ORDER.length - MOBILE_ORDER.indexOf(`${o.bay}:${o.level}`) },
+    );
+  }
+
+  const objs = placed.map((o) => {
     const ox = o.bay * BAY;
     const oz = o.level === 'floor' ? 0 : levelZ(o.level) + BOARD;
     return {
       ...o,
       boxes: o.boxes.map((b) => ({ ...b, x: b.x + ox, z: b.z + oz })),
-      anchor: o.anchor ? [o.anchor[0] + ox, o.anchor[1], o.anchor[2] + oz] : undefined,
+      anchor: o.anchor ? ([o.anchor[0] + ox, o.anchor[1], o.anchor[2] + oz] as [number, number, number]) : undefined,
     };
   });
-}
 
-export const POST_TOP = levelZ(LEVELS - 1) + BOARD + POST_OVERHANG;
-export const CENTER: [number, number, number] = [(BAYS * BAY) / 2, DEPTH / 2 + 2, (levelZ(LEVELS - 1) + BOARD + 8) / 2];
+  const top = levelZ(levels - 1) + BOARD;
+  const postTop = top + POST_OVERHANG;
+  const shelf: Box[] = [];
+  for (let L = 0; L < levels; L++) for (let bay = 0; bay < bays; bay++) shelf.push(box(bay * BAY, 0, levelZ(L), BAY, DEPTH, BOARD));
+  for (let i = 0; i <= bays; i++) for (const y of [0, DEPTH - POST]) shelf.push(box(i * BAY - POST / 2, y, 0, POST, POST, postTop));
 
-/** Boards + posts. */
-export function shelfBoxes(): Box[] {
-  const out: Box[] = [];
-  for (let L = 0; L < LEVELS; L++) for (let bay = 0; bay < BAYS; bay++) out.push(box(bay * BAY, 0, levelZ(L), BAY, DEPTH, BOARD));
-  for (let i = 0; i <= BAYS; i++) for (const y of [0, DEPTH - POST]) out.push(box(i * BAY - POST / 2, y, 0, POST, POST, POST_TOP));
-  return out;
+  return { key, bays, levels, objs, shelf, center: [(bays * BAY) / 2, DEPTH / 2 + 2, (top + 8) / 2] };
 }
 
 /** Empty volume of the cubby an object sits in (camera framing on click). */

@@ -189,8 +189,15 @@ body.panel-open .switches { display: none; }
 .page-foot { margin-top: 72px; padding-top: 16px; border-top: 1px solid var(--hair); display: flex; gap: 18px; flex-wrap: wrap; font: 12px var(--mono); }
 .page-foot a { text-decoration: none; border-bottom: 1px solid var(--hair); }
 
+.scroll-spacer { pointer-events: none; }
+
 @media (max-width: 700px) {
   .chrome, .page-head { padding: 14px 16px; }
+  /* the shelf scrolls underneath the header on phones, so give it a soft backdrop */
+  .chrome { background: linear-gradient(var(--bg) 72%, transparent); padding-bottom: 22px; }
+  .chrome-nav { gap: 12px; padding-top: 6px; }
+  body.panel-open { overflow: hidden; }
+  .stage canvas { touch-action: pan-y; } /* let a vertical swipe scroll the page; taps still reach the shelf */
   .chrome-sub { display: none; }
   .hint { left: 16px; bottom: 12px; right: 140px; }
   .switches { right: 16px; bottom: 12px; }
