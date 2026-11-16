@@ -4,6 +4,8 @@ import jason from '@/assets/testimonials/jason.jpg';
 import kea from '@/assets/testimonials/kea.jpg';
 import nathan from '@/assets/testimonials/nathan.jpg';
 import elPrimo from '@/assets/testimonials/big-daddy-el-primo.jpg';
+import jarrod from '@/assets/testimonials/jarrod.jpg';
+import joel from '@/assets/testimonials/joel.png';
 
 export const about = {
   portrait,
@@ -40,5 +42,16 @@ export const testimonials: { name: string; quote: string; photo: StaticImageData
     name: 'El Primo',
     quote: 'gabriel and i are always down for some brawling and when we are done with brawling we start coding',
     photo: elPrimo,
+  },
+  {
+    name: 'Jarrod',
+    quote: 'Man went from a brawl stars champion to a SWE legend',
+    photo: jarrod,
+  },
+  {
+    name: 'Joel',
+    quote:
+      'Gabriel is a bundle of joy. Dedicated to his craft and always seeking to improve, he is a diligent worker that would get the job done with time to spare. He is also an easy-going young man that can work effortlessly with many, making him a great addition to any team.',
+    photo: joel,
   },
 ];
